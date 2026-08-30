@@ -35,6 +35,7 @@ export function selectDailyQueue<T>(items: T[], mode: TrainingMode): T[] {
 }
 
 export type QueueCandidate = {
+  id: number;
   status: string;
   nextReviewAt: string | null;
 };
@@ -46,7 +47,10 @@ export function prioritizeTrainingQueue<T extends QueueCandidate>(items: T[]): T
     const leftPriority = priority(left.status);
     const rightPriority = priority(right.status);
     if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-    return (left.nextReviewAt ?? "").localeCompare(right.nextReviewAt ?? "");
+    const dueOrder = (left.nextReviewAt ?? "").localeCompare(
+      right.nextReviewAt ?? "",
+    );
+    return dueOrder || left.id - right.id;
   });
 }
 
