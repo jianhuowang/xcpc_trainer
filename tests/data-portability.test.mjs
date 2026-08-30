@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   parseImportBundle,
   problemIdentity,
+  settingsMergePreview,
 } from "../lib/data/import.ts";
 import {
   createReminderCandidate,
@@ -137,4 +139,36 @@ test("提醒按上海自然日生成稳定去重键", () => {
   });
   assert.equal(first.dedupeKey, second.dedupeKey);
   assert.equal(first.payload.selectedCount, 2);
+});
+
+test("设置导入预览遵守仅合并语义", () => {
+  assert.deepEqual(settingsMergePreview(false), { add: 1, skip: 0 });
+  assert.deepEqual(settingsMergePreview(true), { add: 0, skip: 1 });
+});
+
+test("迁移历史保持 0000 到 0004 的仅追加基线", async () => {
+  const journal = JSON.parse(
+    await readFile(
+      new URL("../drizzle/meta/_journal.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(
+    journal.entries.map((entry) => entry.tag),
+    [
+      "0000_chunky_moon_knight",
+      "0001_mighty_bushwacker",
+      "0002_curly_selene",
+      "0003_warm_liz_osborn",
+      "0004_mean_blue_blade",
+    ],
+  );
+});
+
+test("完整导出版本保持 v4", async () => {
+  const source = await readFile(
+    new URL("../app/api/export/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /version:\s*4/);
 });

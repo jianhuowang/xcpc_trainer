@@ -19,3 +19,12 @@ test("agent policy rejects client review dates", async () => {
   );
   assert.match(source, /clientMaySetReviewDate:\s*false/);
 });
+
+test("导入界面明确保留现有训练设置", async () => {
+  const source = await readFile(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /保留当前训练设置/);
+  assert.doesNotMatch(source, /恢复备份中的训练模式设置/);
+});

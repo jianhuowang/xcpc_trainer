@@ -150,6 +150,10 @@ export function contestIdentity(input: {
   return `title:${input.title.trim().toLowerCase()}:${input.startedAt.slice(0, 10)}`;
 }
 
+export function settingsMergePreview(existing: boolean) {
+  return existing ? { add: 0, skip: 1 } : { add: 1, skip: 0 };
+}
+
 export function parseImportBundle(input: unknown): ImportBundle {
   const envelope = record(input);
   if (envelope.format !== "xcpc-trainer-export") {

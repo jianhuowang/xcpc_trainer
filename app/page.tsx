@@ -1140,6 +1140,7 @@ type ImportPreview = {
   contests: { add: number; skip: number };
   problems: { add: number; skip: number };
   attempts: { add: number };
+  settings: { add: number; skip: number };
 };
 
 function ImportDialog({ onImported }: { onImported: () => void }) {
@@ -1235,7 +1236,10 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
               <ImportMetric label="尝试记录" value={preview.attempts.add} />
             </div>
             <p className="mt-3 text-xs leading-5 text-muted-foreground">
-              将跳过 {preview.contests.skip} 场重复比赛和 {preview.problems.skip} 道重复题，并恢复备份中的训练模式设置。
+              将跳过 {preview.contests.skip} 场重复比赛和 {preview.problems.skip} 道重复题；
+              {preview.settings.skip
+                ? "保留当前训练设置。"
+                : "写入备份中的训练设置。"}
             </p>
           </div>
         ) : null}

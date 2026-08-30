@@ -5,6 +5,7 @@ import {
   contestIdentity,
   parseImportBundle,
   problemIdentity,
+  settingsMergePreview,
 } from "@/lib/data/import";
 
 export async function POST(request: Request) {
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     const bundle = parseImportBundle(body.data);
     const dryRun = body.dryRun !== false;
     const db = getDb();
-    const [existingProblems, existingContests] = await Promise.all([
+    const [existingProblems, existingContests, existingSettings] = await Promise.all([
       db
         .select({
           id: problems.id,
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
           startedAt: contests.startedAt,
         })
         .from(contests),
+      db
+        .select({ id: trainingSettings.id })
+        .from(trainingSettings)
+        .where(eq(trainingSettings.id, 1))
+        .limit(1),
     ]);
 
     const problemKeys = new Set(existingProblems.map(problemIdentity));
@@ -54,7 +60,7 @@ export async function POST(request: Request) {
       contests: { add: newContests.length, skip: bundle.contests.length - newContests.length },
       problems: { add: newProblems.length, skip: bundle.problems.length - newProblems.length },
       attempts: { add: newAttempts.length },
-      settings: bundle.settings,
+      settings: settingsMergePreview(existingSettings.length > 0),
     };
 
     if (dryRun) return Response.json({ dryRun: true, preview });
@@ -162,24 +168,17 @@ export async function POST(request: Request) {
       });
     }
 
-    const [settings] = await db
-      .select({ id: trainingSettings.id })
-      .from(trainingSettings)
-      .where(eq(trainingSettings.id, 1))
-      .limit(1);
-    const settingsValues = {
-      mode: bundle.settings.mode,
-      timezone: bundle.settings.timezone,
-      reminderTime: bundle.settings.reminderTime,
-      updatedAt: new Date().toISOString(),
-    };
-    if (settings) {
+    if (!existingSettings.length) {
       await db
-        .update(trainingSettings)
-        .set(settingsValues)
-        .where(eq(trainingSettings.id, 1));
-    } else {
-      await db.insert(trainingSettings).values({ id: 1, ...settingsValues });
+        .insert(trainingSettings)
+        .values({
+          id: 1,
+          mode: bundle.settings.mode,
+          timezone: bundle.settings.timezone,
+          reminderTime: bundle.settings.reminderTime,
+          updatedAt: new Date().toISOString(),
+        })
+        .onConflictDoNothing({ target: trainingSettings.id });
     }
 
     return Response.json({ dryRun: false, imported: preview });
