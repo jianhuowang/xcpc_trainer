@@ -7,6 +7,7 @@ import {
   MODE_CONFIG,
   type TrainingMode,
 } from "@/lib/training/modes";
+import { toDashboardBlindProblem } from "@/lib/training/projection";
 
 function errorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Unexpected error";
@@ -14,12 +15,6 @@ function errorMessage(error: unknown) {
     return "数据库尚未初始化，请先应用项目迁移。";
   }
   return message;
-}
-
-function hideBlindFields<T extends { notes: string; validatesProblemId: number | null }>(
-  problem: T,
-) {
-  return { ...problem, notes: "", validatesProblemId: null };
 }
 
 export async function GET() {
@@ -87,17 +82,17 @@ export async function GET() {
     ).length;
 
     return Response.json({
-      due: queue.selected.map(hideBlindFields),
+      due: queue.selected.map(toDashboardBlindProblem),
       queues: {
-        upsolve: queue.upsolve.map(hideBlindFields),
-        transfer: queue.transfer.map(hideBlindFields),
-        review: queue.review.map(hideBlindFields),
+        upsolve: queue.upsolve.map(toDashboardBlindProblem),
+        transfer: queue.transfer.map(toDashboardBlindProblem),
+        review: queue.review.map(toDashboardBlindProblem),
       },
-      transferCandidates: transferCandidates.map(hideBlindFields),
+      transferCandidates: transferCandidates.map(toDashboardBlindProblem),
       recent: [...rows]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, 8)
-        .map(hideBlindFields),
+        .map(toDashboardBlindProblem),
       recentContests: recentContestRows.map((contest) => {
         const linked = contestProblems.filter((problem) => problem.contestId === contest.id);
         return {

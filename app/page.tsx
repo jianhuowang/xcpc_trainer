@@ -65,17 +65,8 @@ type Problem = {
   platform: string;
   origin: string;
   status: string;
-  reviewStage: number;
   cleanStreak: number;
-  lapseCount: number;
-  trainingRole: string;
-  validatesProblemId: number | null;
-  transferIntegrity: string;
   nextReviewAt: string | null;
-  lastEvidence: Evidence | "assigned_transfer";
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
 };
 
 type DashboardData = {

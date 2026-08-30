@@ -7,6 +7,7 @@ import {
   isTrainingMode,
   MODE_CONFIG,
 } from "@/lib/training/modes";
+import { toAgentDueProblem } from "@/lib/training/projection";
 
 export async function GET(request: Request) {
   const unauthorized = requireAgentAccess(request);
@@ -36,21 +37,7 @@ export async function GET(request: Request) {
         )
         .map((problem) => problem.validatesProblemId),
     );
-    const due = queue.selected.map((problem) => ({
-      id: problem.id,
-      title: problem.title,
-      url: problem.url,
-      platform: problem.platform,
-      origin: problem.origin,
-      reviewStage: problem.reviewStage,
-      queueType:
-        problem.status === "upsolve"
-          ? "upsolve"
-          : problem.status === "transfer"
-            ? "unlabeled_transfer"
-            : "blind_review",
-      dueAt: problem.nextReviewAt,
-    }));
+    const due = queue.selected.map(toAgentDueProblem);
 
     return Response.json({
       generatedAt: now,
