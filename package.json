@@ -12,7 +12,8 @@
     "start": "node scripts/project-command.mjs start",
     "test": "npm run build && node --test",
     "lint": "node scripts/project-command.mjs lint",
-    "db:generate": "node scripts/project-command.mjs db:generate"
+    "db:generate": "node scripts/project-command.mjs db:generate",
+    "db:migrate:local": "node scripts/project-command.mjs db:migrate:local"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

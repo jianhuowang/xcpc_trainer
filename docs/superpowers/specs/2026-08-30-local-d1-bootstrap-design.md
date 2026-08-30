@@ -2,7 +2,7 @@
 
 **日期：** 2026-08-30
 
-**状态：** 已选定方案，待用户确认书面规格
+**状态：** 已确认并实施
 
 ## 问题
 
@@ -28,7 +28,7 @@ npm run dev
 
 ## 配置与数据边界
 
-- 增加供 Wrangler CLI 使用的仓库级配置，binding 名保持 `DB`，本地数据库名保持 `site-creator-d1`。
+- 增加仅供 Wrangler CLI 使用的 `wrangler.local.jsonc`，避免 Cloudflare Vite 插件自动加载后与 `vite.config.ts` 的内联配置冲突；binding 名保持 `DB`，本地数据库名保持 `site-creator-d1`。
 - migration 目录明确指向现有 `drizzle/`。
 - 本地数据继续存放在已忽略的 `.wrangler/state`，不会进入 Git、导出文件或托管 D1。
 - 命令可以重复运行；已经应用的 migration 由 Wrangler 记录并跳过。

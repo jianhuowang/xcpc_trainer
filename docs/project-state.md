@@ -41,12 +41,13 @@
 2. 安装 Node.js 22 或更新版本。
 3. 在 VS Code 或 Codex 中打开仓库目录。
 4. 运行 `npm ci`。
-5. 运行 `npm test` 与 `npm run lint`，确认本机基线。
-6. 运行 `npm run dev` 启动本地版本。
-7. 修改项目前先完整阅读 `AGENTS.md`。
-8. 不重写 `drizzle/` 下的既有文件；未来 schema 变化只能追加新 migration。
+5. 运行 `npm run db:migrate:local`，把既有 migrations 应用到本地 D1。
+6. 运行 `npm test` 与 `npm run lint`，确认本机基线。
+7. 运行 `npm run dev` 启动本地版本。
+8. 修改项目前先完整阅读 `AGENTS.md`。
+9. 不重写 `drizzle/` 下的既有文件；未来 schema 变化只能追加新 migration。
 
-托管 Site 与本地 D1 数据相互独立。在不同环境间移动训练记录时，使用 Dashboard 的 JSON 导出与合并导入流程；已有本地设置会被保留。
+本地 migrations 和数据只写入已忽略的 `.wrangler/state`，与托管 Site 的 D1 相互独立。在不同环境间移动训练记录时，使用 Dashboard 的 JSON 导出与合并导入流程；已有本地设置会被保留。
 
 ## GitHub 状态
 

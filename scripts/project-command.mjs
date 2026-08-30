@@ -26,6 +26,21 @@ const commands = {
     binName: "drizzle-kit",
     args: ["generate"],
   },
+  "db:migrate:local": {
+    packageName: "wrangler",
+    binName: "wrangler",
+    args: [
+      "d1",
+      "migrations",
+      "apply",
+      "DB",
+      "--local",
+      "--persist-to",
+      ".wrangler/state",
+      "--config",
+      "wrangler.local.jsonc",
+    ],
+  },
 };
 
 function durationMs(value, fallback) {

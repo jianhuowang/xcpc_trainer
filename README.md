@@ -47,8 +47,11 @@
 
 ```bash
 npm ci
+npm run db:migrate:local
 npm run dev
 ```
+
+`db:migrate:local` 只把仓库中既有的 `drizzle/0000`-`0004` 应用到已忽略的 `.wrangler/state`。它不会修改托管 D1，可以安全重复执行。
 
 常用检查：
 

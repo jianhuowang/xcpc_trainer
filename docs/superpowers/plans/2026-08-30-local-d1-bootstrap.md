@@ -21,7 +21,7 @@
 ### Task 1：本地 D1 初始化命令与首次使用文档
 
 **Files:**
-- Create: `wrangler.jsonc`
+- Create: `wrangler.local.jsonc`
 - Modify: `package.json`
 - Modify: `scripts/project-command.mjs`
 - Modify: `tests/project-command.test.mjs`
@@ -32,7 +32,7 @@
 - Consumes: Wrangler 的 `d1 migrations apply DB --local --persist-to .wrangler/state` 命令与现有 `drizzle/` migrations。
 - Produces: `npm run db:migrate:local`；重复执行时不重复应用 migration。
 
-- [ ] **Step 1：写入失败的命令与配置契约测试**
+- [x] **Step 1：写入失败的命令与配置契约测试**
 
 在 `tests/project-command.test.mjs` 的 npm 工作流断言中增加：
 
@@ -48,7 +48,7 @@ assert.equal(
 ```js
 test("本地 D1 配置复用既有 migrations", async () => {
   const source = await readFile(
-    new URL("../wrangler.jsonc", import.meta.url),
+    new URL("../wrangler.local.jsonc", import.meta.url),
     "utf8",
   ).catch(() => "{}");
   const config = JSON.parse(source);
@@ -58,13 +58,13 @@ test("本地 D1 配置复用既有 migrations", async () => {
 });
 ```
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 Run: `node --test tests/project-command.test.mjs`
 
 Expected: FAIL，`db:migrate:local` 实际为 `undefined`，且本地 D1 配置断言不成立。
 
-- [ ] **Step 3：实现最小命令与 Wrangler 配置**
+- [x] **Step 3：实现最小命令与 Wrangler 配置**
 
 在 `package.json` 增加：
 
@@ -86,11 +86,13 @@ Expected: FAIL，`db:migrate:local` 实际为 `undefined`，且本地 D1 配置�
     "--local",
     "--persist-to",
     ".wrangler/state",
+    "--config",
+    "wrangler.local.jsonc",
   ],
 },
 ```
 
-创建 `wrangler.jsonc`：
+创建 CLI 专用的 `wrangler.local.jsonc`；不能使用默认名 `wrangler.jsonc`，否则 Cloudflare Vite 插件会自动加载它，并与 `vite.config.ts` 的内联配置重复：
 
 ```json
 {
@@ -110,13 +112,13 @@ Expected: FAIL，`db:migrate:local` 实际为 `undefined`，且本地 D1 配置�
 }
 ```
 
-- [ ] **Step 4：验证命令契约 GREEN**
+- [x] **Step 4：验证命令契约 GREEN**
 
 Run: `node --test tests/project-command.test.mjs`
 
 Expected: 2 tests PASS。
 
-- [ ] **Step 5：更新首次使用文档**
+- [x] **Step 5：更新首次使用文档**
 
 把 README 和 `docs/project-state.md` 的首次使用顺序统一为：
 
@@ -128,7 +130,7 @@ npm run dev
 
 说明本地 migration 只作用于 `.wrangler/state`，与托管 D1 相互独立。
 
-- [ ] **Step 6：执行真实迁移并验证重复运行**
+- [x] **Step 6：执行真实迁移并验证重复运行**
 
 Run: `npm run db:migrate:local`
 
@@ -138,7 +140,7 @@ Run: `npm run db:migrate:local`
 
 Expected: Wrangler 报告没有待应用 migration，exit 0。
 
-- [ ] **Step 7：启动并验证 Dashboard API**
+- [x] **Step 7：启动并验证 Dashboard API**
 
 Run: `npm run dev`
 
@@ -150,7 +152,7 @@ Run: `npm run dev`
 
 Expected: `200`。
 
-- [ ] **Step 8：运行完整回归检查**
+- [x] **Step 8：运行完整回归检查**
 
 Run: `npm test`
 
@@ -171,7 +173,7 @@ Expected: exit 0，且 `git diff --name-only -- db/schema.ts drizzle` 无输出�
 - [ ] **Step 9：提交并更新 PR**
 
 ```powershell
-git add -- wrangler.jsonc package.json scripts/project-command.mjs tests/project-command.test.mjs README.md docs/project-state.md
+git add -- wrangler.local.jsonc package.json scripts/project-command.mjs tests/project-command.test.mjs README.md docs/project-state.md docs/superpowers/specs/2026-08-30-local-d1-bootstrap-design.md docs/superpowers/plans/2026-08-30-local-d1-bootstrap.md
 git commit -m "fix: initialize local D1 before first use"
 git push
 ```
