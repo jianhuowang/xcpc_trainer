@@ -1,96 +1,96 @@
-# XCPC Trainer Invariant Hardening Design
+# XCPC Trainer 核心约束加固设计
 
-## Context
+## 背景
 
-XCPC Trainer v0.4 already implements the personal contest-to-upsolve-to-blind-review-to-transfer loop. The first development phase will make the existing behavior reproducible and close invariant gaps before adding new learning-flow concepts.
+XCPC Trainer v0.4 已经实现个人赛后补题、盲做复习与迁移验证的完整训练闭环。第一阶段开发会先确保现有行为可复现，并补齐核心约束缺口，暂不引入新的学习流程概念。
 
-The current scheduling evidence is not yet large enough to justify changing the 3/7/21/45-day intervals or the 6/4/2 daily caps. Contest triage, rescue queues, candidate pools, archives, and low-energy semantics will be designed separately after this hardening phase.
+目前积累的排程数据还不足以支持调整 3/7/21/45 天复习间隔或 6/4/2 每日上限。比赛分流、抢救队列、候选题池、归档和低精力模式的具体语义将在本阶段加固完成后另行设计。
 
-## Goals
+## 目标
 
-- Make all documented npm workflows usable from native Windows and POSIX environments.
-- Ensure a stable core problem cannot be reopened by a later independent AC.
-- Make blind queue responses safe by construction through explicit field allowlists.
-- Make queue order deterministic even when priority and due time are identical.
-- Enforce merge-only behavior for singleton settings during backup import.
-- Preserve the current database schema, migration history, scheduling parameters, and export contract.
+- 使文档中列出的所有 npm 工作流都能在原生 Windows 和 POSIX 环境运行。
+- 确保已经进入 `stable` 的核心题不会因之后一次独立 AC 被重新激活。
+- 通过显式字段白名单，从结构上保证盲做队列响应安全。
+- 即使优先级和到期时间相同，队列顺序仍保持确定性。
+- 在备份导入时强制单例设置采用仅合并（merge-only）行为。
+- 保留现有数据库 schema、迁移历史、排程参数和数据导出契约。
 
-## Non-goals
+## 非目标
 
-- No interval or daily-cap changes.
-- No new training states, contest triage queues, or hint-level model.
-- No D1 schema changes and no new migration.
-- No edits to migrations `0000` through `0004` or their snapshots.
-- No export version bump; export remains v4 and import remains compatible with v1-v4.
-- No GitHub push or deployment.
+- 不调整复习间隔或每日上限。
+- 不新增训练状态、比赛分流队列或提示等级模型。
+- 不修改 D1 schema，也不新增迁移。
+- 不编辑 `0000` 至 `0004` 迁移及其快照。
+- 不提升导出版本；导出保持 v4，导入继续兼容 v1-v4。
+- 不推送至 GitHub，也不部署。
 
-## Design
+## 设计
 
-### 1. Cross-platform command entry points
+### 1. 跨平台命令入口
 
-Add Node-based command wrappers under `scripts/` and route npm scripts through them. The environment wrapper will reproduce the existing isolated cache, Wrangler log, temporary directory, and project-root behavior without changing global environment configuration. The build wrapper will spawn Vinext with a three-minute default deadline, terminate it on timeout, and return the child exit code.
+在 `scripts/` 下添加基于 Node 的命令包装器，并让 npm scripts 通过这些入口执行。环境包装器会复现现有的隔离缓存、Wrangler 日志、临时目录和项目根目录行为，不修改全局环境配置。构建包装器会启动 Vinext，默认设置三分钟超时；超时后终止进程，并透传子进程退出码。
 
-The existing shell scripts remain available for the managed hosting environment and for comparison during the transition. `build`, `test`, `lint`, `dev`, `start`, `db:generate`, and `install:ci` must no longer require a user-installed Bash when invoked through npm.
+现有 shell 脚本继续保留，供托管环境使用，并在迁移期间用于行为对照。通过 npm 调用时，`build`、`test`、`lint`、`dev`、`start`、`db:generate` 和 `install:ci` 不应再依赖用户预先安装 Bash。
 
-### 2. Central evidence transition guard
+### 2. 统一证据状态转换守卫
 
-Add a pure training-policy function that receives the current projection and evidence before a route schedules the next review. A core problem already in `stable` that receives `independent_ac` remains `stable`, keeps `nextReviewAt` null, and records the attempt in the append-only attempt log. Failed, editorial-assisted, or hinted evidence still reactivates a stable or retained problem through the existing deterministic scheduler.
+添加一个纯训练策略函数，在路由安排下一次复习之前接收当前状态投影和本次证据。已经处于 `stable` 的核心题收到 `independent_ac` 后仍保持 `stable`，`nextReviewAt` 保持为 null，同时将本次尝试写入仅追加的尝试日志。失败、参考题解或使用提示的证据，仍按照现有确定性排程器重新激活 `stable` 或 `retained` 题目。
 
-Transfer verification keeps its existing first-attempt integrity rules. Clients still cannot submit dates, stages, streaks, statuses, or transfer integrity.
+迁移验证继续沿用现有的首次尝试完整性规则。客户端仍不能提交日期、阶段、连续成功次数、状态或迁移完整性字段。
 
-All behavior is tested against the pure policy function before route integration.
+所有行为先针对纯策略函数编写测试，再集成到路由。
 
-### 3. Blind response projections
+### 3. 盲做响应投影
 
-Add explicit serializers for user-facing blind problems and agent-facing due problems. A blind problem response may contain only the identity and action fields required to attempt it: `id`, `title`, `url`, `platform`, `origin`, a presentation-safe queue/status value, `cleanStreak` when needed for the current badge, and `nextReviewAt`.
+为面向用户的盲做题目和面向 Agent 的到期题目添加显式序列化器。盲做题目响应只能包含完成作答所需的标识和操作字段：`id`、`title`、`url`、`platform`、`origin`、适合展示的队列或状态值、当前徽章确实需要的 `cleanStreak`，以及 `nextReviewAt`。
 
-It must not contain `notes`, `lastEvidence`, `validatesProblemId`, `transferIntegrity`, contest notes, prior solutions, editorials, or algorithm tags. Dashboard due queues and recent cards will use explicit projections instead of spreading database rows. Agent context retains its narrower existing contract.
+响应不得包含 `notes`、`lastEvidence`、`validatesProblemId`、`transferIntegrity`、比赛笔记、既往解法、题解或算法标签。Dashboard 的到期队列和近期题目卡片将使用显式投影，不再直接展开数据库行。Agent 上下文继续维持现有的更窄契约。
 
-Runtime object tests will verify exact keys rather than searching source text for redaction strings.
+运行时对象测试会校验精确字段集合，而不是在源码中搜索脱敏字符串。
 
-### 4. Deterministic queue ordering
+### 4. 确定性队列排序
 
-Queue candidates will include a stable unique ID. Ordering remains:
+队列候选项将包含稳定且唯一的 ID。排序规则保持为：
 
-1. upsolve debt;
-2. unseen transfer checks;
-3. blind review and retention;
-4. oldest due time;
-5. stable unique ID as the final tie-breaker.
+1. 补题欠账；
+2. 尚未完成的迁移验证；
+3. 盲做复习和保持复习；
+4. 最早到期时间；
+5. 以稳定唯一 ID 作为最终决胜条件。
 
-Daily caps continue to apply only after prioritization. Identical inputs must produce identical results across dashboard, agent, and reminder consumers.
+每日上限仍只在优先级排序完成后应用。相同输入必须在 Dashboard、Agent 和提醒消费者中产生相同结果。
 
-### 5. Merge-only settings import
+### 5. 仅合并设置导入
 
-Dry-run preview will report whether settings would be added or skipped. A merge import inserts settings only when the singleton row is absent; an existing row wins and is not overwritten. Contests, problems, attempts, transfer links, and v1-v4 normalization keep their current compatibility behavior.
+Dry-run 预览会报告设置将被新增还是跳过。合并导入只在单例设置行不存在时插入；已有设置优先，且不会被覆盖。比赛、题目、尝试、迁移链接以及 v1-v4 规范化继续保持当前兼容行为。
 
-Destructive settings restore is outside this endpoint and would require a future explicit restore flow with confirmation and rollback.
+破坏性设置恢复不属于此端点范围；未来如需支持，必须提供独立且明确的恢复流程，并包含确认和回滚机制。
 
-### 6. Migration and portability guard
+### 6. 迁移与可移植性守卫
 
-Tests will verify that the migration journal still contains exactly the existing `0000`-`0004` sequence and that this phase produces no schema diff. They will not hash raw working-tree bytes because Windows line-ending conversion can create false failures.
+测试会验证迁移日志仍然严格包含现有 `0000`-`0004` 序列，并确认本阶段不产生 schema 差异。测试不会对工作树原始字节做哈希，因为 Windows 换行符转换可能产生误报。
 
-The export route remains byte-shape compatible at version 4. New durable fields are prohibited in this phase; any future durable field requires a generated append-only migration and an export-version decision.
+导出路由继续保持 v4 字节结构兼容。本阶段禁止新增持久化字段；未来任何持久化字段都必须通过新生成的仅追加迁移引入，并明确决定是否提升导出版本。
 
-## Error handling
+## 错误处理
 
-- Command wrappers propagate child exit codes and print a specific timeout or missing-executable message.
-- Stable independent evidence returns a normal recorded result with an unchanged projection, not a fabricated new schedule.
-- Blind serializers fail at compile time when consumers request unavailable hidden fields.
-- Import preview and mutation return the same settings action so the user can see that existing settings were preserved.
+- 命令包装器透传子进程退出码，并针对超时或缺失可执行文件输出明确消息。
+- `stable` 题目的独立证据正常记录结果，状态投影保持不变，不伪造新的复习排程。
+- 当消费者请求不可用的隐藏字段时，盲做序列化器应在编译阶段失败。
+- 导入预览和实际写入返回一致的设置处理结果，让用户明确看到已有设置得到保留。
 
-## Test strategy
+## 测试策略
 
-Implementation follows red-green-refactor for each behavior:
+每项行为均遵循 red-green-refactor：
 
-- command-wrapper unit tests plus native `npm test` and `npm run lint` verification;
-- pure transition tests for stable independent evidence and non-independent reactivation;
-- exact-key blind DTO tests for dashboard and agent projections;
-- equal-priority/equal-date queue tie tests;
-- import tests for add-versus-skip settings and v1-v4 fixtures;
-- migration journal sequence test;
-- final production build, full Node test suite, and ESLint run on Windows.
+- 命令包装器单元测试，以及原生 Windows 下的 `npm test` 和 `npm run lint` 验证；
+- 针对稳定题独立证据和非独立证据重新激活行为的纯状态转换测试；
+- Dashboard 与 Agent 投影的盲做 DTO 精确字段测试；
+- 优先级和日期相同时的队列顺序测试；
+- 设置新增与跳过行为，以及 v1-v4 fixture 的导入测试；
+- 迁移日志序列测试；
+- 在 Windows 上完成最终生产构建、完整 Node 测试套件和 ESLint 检查。
 
-## Training-flow follow-up
+## 训练流程后续设计
 
-A separate design will evaluate contest triage so that not every exposed problem becomes debt. It will compare a bounded rescue queue, a deadline-free candidate pool, and archive routing while preserving blind attempts and data portability. No such behavior is included in this hardening phase.
+后续将单独设计比赛分流，避免所有接触过的题目都自动成为欠账。设计会比较有上限的抢救队列、无截止日期的候选题池和归档路径，同时保留盲做尝试与数据可移植性。本加固阶段不包含这些行为。
