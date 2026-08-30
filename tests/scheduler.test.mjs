@@ -9,7 +9,10 @@ import {
   selectDailyQueue,
 } from "../lib/training/modes.ts";
 import { classifyTransferAttempt } from "../lib/training/transfer.ts";
-import { shouldReactivateProblem } from "../lib/training/reactivation.ts";
+import {
+  scheduleProblemEvidence,
+  shouldReactivateProblem,
+} from "../lib/training/reactivation.ts";
 
 const NOW = new Date("2026-08-29T12:00:00.000Z");
 
@@ -153,6 +156,35 @@ test("稳定或保持题遇到新的非独立证据会重新激活", () => {
   assert.equal(shouldReactivateProblem("retained", "hinted_ac"), true);
   assert.equal(shouldReactivateProblem("stable", "independent_ac"), false);
   assert.equal(shouldReactivateProblem("review", "failed"), false);
+});
+
+test("稳定态再次独立完成只追加证据而不重新排期", () => {
+  const decision = scheduleProblemEvidence({
+    status: "stable",
+    reviewStage: 4,
+    cleanStreak: 1,
+    lapseCount: 0,
+    lastEvidence: "independent_ac",
+    evidence: "independent_ac",
+    now: NOW,
+  });
+  assert.equal(decision.status, "stable");
+  assert.equal(decision.dueAt, null);
+  assert.equal(decision.reviewStage, 4);
+});
+
+test("稳定态收到失败证据仍会重新激活", () => {
+  const decision = scheduleProblemEvidence({
+    status: "stable",
+    reviewStage: 4,
+    cleanStreak: 1,
+    lapseCount: 0,
+    lastEvidence: "independent_ac",
+    evidence: "failed",
+    now: NOW,
+  });
+  assert.equal(decision.status, "upsolve");
+  assert.ok(decision.dueAt);
 });
 
 test("训练模式会稳定限制每日队列", () => {

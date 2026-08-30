@@ -3,8 +3,8 @@ import { getDb } from "@/db";
 import { attempts, problems } from "@/db/schema";
 import {
   isSolveEvidence,
-  scheduleNextReview,
 } from "@/lib/training/scheduler";
+import { scheduleProblemEvidence } from "@/lib/training/reactivation";
 import { classifyTransferAttempt } from "@/lib/training/transfer";
 
 export async function POST(request: Request) {
@@ -74,13 +74,12 @@ export async function POST(request: Request) {
           reason:
             "首次接触的无标签迁移题已独立完成：原训练题获得迁移证据，进入稳定状态。",
         }
-      : scheduleNextReview({
-          currentStage: problem.reviewStage,
-          currentCleanStreak:
-            problem.cleanStreak === 0 && problem.lastEvidence === "independent_ac"
-              ? problem.reviewStage
-              : problem.cleanStreak,
-          currentLapseCount: problem.lapseCount,
+      : scheduleProblemEvidence({
+          status: problem.status,
+          reviewStage: problem.reviewStage,
+          cleanStreak: problem.cleanStreak,
+          lapseCount: problem.lapseCount,
+          lastEvidence: problem.lastEvidence,
           evidence: body.evidence,
         });
     const nextTransferIntegrity = isTransfer
