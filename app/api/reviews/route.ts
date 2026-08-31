@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { attempts, problems } from "@/db/schema";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import {
   parseEvidenceSubmission,
   sameEvidenceSubmission,
@@ -163,4 +164,7 @@ export async function recordEvidence(request: Request) {
   }
 }
 
-export const POST = recordEvidence;
+export async function POST(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  return unauthorized ?? recordEvidence(request);
+}

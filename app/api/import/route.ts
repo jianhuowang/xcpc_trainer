@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { attempts, contests, problems, trainingSettings } from "@/db/schema";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import {
   contestIdentity,
   parseImportBundle,
@@ -9,6 +10,8 @@ import {
 } from "@/lib/data/import";
 
 export async function POST(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  if (unauthorized) return unauthorized;
   try {
     const contentLength = Number(request.headers.get("content-length") ?? 0);
     if (contentLength > 2_500_000) {

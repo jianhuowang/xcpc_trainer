@@ -1,9 +1,12 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { trainingSettings } from "@/db/schema";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import { isTrainingMode, MODE_CONFIG } from "@/lib/training/modes";
 
 export async function PUT(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  if (unauthorized) return unauthorized;
   try {
     const body = (await request.json()) as Record<string, unknown>;
     if (!isTrainingMode(body.mode)) {

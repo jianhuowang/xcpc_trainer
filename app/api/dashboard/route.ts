@@ -1,6 +1,7 @@
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { attempts, contests, problems, trainingSettings } from "@/db/schema";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import {
   buildDailyQueue,
   isTrainingMode,
@@ -17,7 +18,9 @@ function errorMessage(error: unknown) {
   return message;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  if (unauthorized) return unauthorized;
   try {
     const db = getDb();
     const rows = await db
