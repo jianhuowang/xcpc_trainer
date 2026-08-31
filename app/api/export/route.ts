@@ -22,7 +22,7 @@ export async function GET() {
       JSON.stringify(
         {
           format: "xcpc-trainer-export",
-          version: 4,
+          version: 5,
           exportedAt,
           policy: {
             failed: 1,

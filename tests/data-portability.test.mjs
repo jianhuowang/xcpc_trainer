@@ -51,7 +51,39 @@ test("v1 备份可以安全升级为统一导入结构", () => {
   assert.equal(parsed.problems[0].cleanStreak, 2);
   assert.equal(parsed.problems[0].lapseCount, 0);
   assert.equal(parsed.attempts[0].sourceProblemId, 8);
+  assert.equal(parsed.attempts[0].helpLevel, "unknown");
+  assert.equal(parsed.attempts[0].idempotencyKey, null);
   assert.equal(parsed.settings.mode, "recovery");
+});
+
+test("v5 attempt 保留结构化帮助等级和幂等键", () => {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  backup.attempts[0].helpLevel = "h1";
+  backup.attempts[0].idempotencyKey = "018f0f66-7a28-7e31-8a4d-a70b93879a11";
+  const parsed = parseImportBundle(backup);
+  assert.equal(parsed.attempts[0].helpLevel, "h1");
+  assert.equal(
+    parsed.attempts[0].idempotencyKey,
+    "018f0f66-7a28-7e31-8a4d-a70b93879a11",
+  );
+});
+
+test("v5 拒绝非法帮助等级和过短幂等键", () => {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  backup.attempts[0].helpLevel = "H9";
+  backup.attempts[0].idempotencyKey = "short";
+  assert.throws(() => parseImportBundle(backup), /帮助等级|幂等键/);
+});
+
+test("v5 拒绝备份内重复幂等键", () => {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  backup.attempts[0].helpLevel = "none";
+  backup.attempts[0].idempotencyKey = "018f0f66-7a28-7e31-8a4d-a70b93879a11";
+  backup.attempts.push({ ...backup.attempts[0] });
+  assert.throws(() => parseImportBundle(backup), /重复幂等键/);
 });
 
 test("题目链接去重不受末尾斜杠和大小写影响", () => {
@@ -146,7 +178,7 @@ test("设置导入预览遵守仅合并语义", () => {
   assert.deepEqual(settingsMergePreview(true), { add: 0, skip: 1 });
 });
 
-test("迁移历史保持 0000 到 0004 的仅追加基线", async () => {
+test("迁移历史只追加 0005 evidence integrity", async () => {
   const journal = JSON.parse(
     await readFile(
       new URL("../drizzle/meta/_journal.json", import.meta.url),
@@ -161,14 +193,15 @@ test("迁移历史保持 0000 到 0004 的仅追加基线", async () => {
       "0002_curly_selene",
       "0003_warm_liz_osborn",
       "0004_mean_blue_blade",
+      "0005_evidence_integrity",
     ],
   );
 });
 
-test("完整导出版本保持 v4", async () => {
+test("完整导出版本升级为 v5", async () => {
   const source = await readFile(
     new URL("../app/api/export/route.ts", import.meta.url),
     "utf8",
   );
-  assert.match(source, /version:\s*4/);
+  assert.match(source, /version:\s*5/);
 });

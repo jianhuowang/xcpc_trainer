@@ -159,6 +159,8 @@ export async function POST(request: Request) {
         problemId,
         context: attempt.context,
         evidence: attempt.evidence,
+        helpLevel: attempt.helpLevel,
+        idempotencyKey: attempt.idempotencyKey,
         previousStage: attempt.previousStage,
         nextStage: attempt.nextStage,
         scheduledAt: attempt.scheduledAt,
