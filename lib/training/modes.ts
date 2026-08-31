@@ -4,21 +4,24 @@ export type TrainingMode = (typeof TRAINING_MODES)[number];
 
 export const MODE_CONFIG: Record<
   TrainingMode,
-  { label: string; dailyLimit: number; description: string }
+  { label: string; dailyLimit: number; focusLimit: number; description: string }
 > = {
   normal: {
     label: "正常",
     dailyLimit: 6,
+    focusLimit: 3,
     description: "每天最多安排 6 道到期题。",
   },
   recovery: {
     label: "恢复",
     dailyLimit: 4,
+    focusLimit: 2,
     description: "压缩到 4 道，只处理已有训练债务。",
   },
   low_energy: {
     label: "低能量",
     dailyLimit: 2,
+    focusLimit: 1,
     description: "保留 2 道关键任务，避免彻底中断。",
   },
 };

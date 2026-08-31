@@ -27,46 +27,17 @@ export async function GET(request: Request) {
         (problem.nextReviewAt !== null && problem.nextReviewAt <= now),
     );
     const queue = buildDailyQueue(allDue, mode);
-    const pendingTransferSources = new Set(
-      rows
-        .filter(
-          (problem) =>
-            problem.trainingRole === "transfer" &&
-            problem.transferIntegrity === "unseen" &&
-            problem.validatesProblemId !== null,
-        )
-        .map((problem) => problem.validatesProblemId),
-    );
     const due = queue.selected.map(toAgentDueProblem);
 
     return Response.json({
       generatedAt: now,
       mode,
       dailyLimit: MODE_CONFIG[mode].dailyLimit,
+      focusLimit: MODE_CONFIG[mode].focusLimit,
       dueCount: allDue.length,
       deferredCount: queue.deferred,
       due,
-      transferCandidates: rows
-        .filter(
-          (problem) =>
-            problem.trainingRole === "core" &&
-            (problem.status === "retained" || problem.status === "mastered") &&
-            !pendingTransferSources.has(problem.id),
-        )
-        .map((problem) => ({
-          id: problem.id,
-          title: problem.title,
-          url: problem.url,
-          platform: problem.platform,
-          instruction:
-            "选择一道相关但未做过的题；不要把算法标签或与原题的关联展示给用户。",
-        })),
-      acceptedEvidence: [
-        "failed",
-        "editorial_understood",
-        "hinted_ac",
-        "independent_ac",
-      ],
+      acceptedHelpLevels: ["none", "h1", "h2", "h3", "unknown"],
       policy: {
         failedDays: 1,
         editorialUnderstoodDays: 2,
