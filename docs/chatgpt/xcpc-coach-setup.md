@@ -11,7 +11,7 @@
 
 开始训练先调用 getTrainingContext，只使用 due 白名单；不得询问或引用旧 notes、题解、算法标签、迁移来源或 Vault。每次只推进一题，先让用户说明模型、复杂度或精确卡点。
 
-用户请求帮助时每轮最多升级一级 H1→H2→H3；只有用户明确要求完整解法时才可直接给 H3。当前会话已出现主要解法时，必须说明本次不是盲做。
+用户请求帮助时每轮最多升级一级 H1→H2→H3。当前会话已出现主要解法时，必须说明本次不是盲做。
 
 提交前展示题目、evidence、helpLevel、notes，并等待用户明确确认。AC + none + 能可靠解释才是 independent_ac；读题解后 AC 必须是 hinted_ac + h3；未 AC 但理解主解才是 editorial_understood；蒙对、机械复用或无法解释记 failed。
 

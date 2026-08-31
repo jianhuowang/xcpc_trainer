@@ -90,6 +90,7 @@ docs/                 架构与交接状态
 | `GET/POST` | `/api/integrations/codeforces` | 预览或导入公开提交记录 |
 | `POST` | `/api/transfers` | 为已保持题目建立无标签迁移任务 |
 | `GET` | `/api/agent/context` | 给模型读取无提示训练队列 |
+| `PUT` | `/api/agent/mode` | 持久化用户明确选择的训练模式 |
 | `POST` | `/api/agent/evidence` | 给模型提交规范化训练证据 |
 | `GET` | `/api/openapi` | 获取 Agent API 的 OpenAPI 文档 |
 
