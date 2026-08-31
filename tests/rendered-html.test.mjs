@@ -28,3 +28,10 @@ test("导入界面明确保留现有训练设置", async () => {
   assert.match(source, /保留当前训练设置/);
   assert.doesNotMatch(source, /恢复备份中的训练模式设置/);
 });
+
+test("浏览器证据提交包含帮助等级和稳定幂等键", async () => {
+  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(source, /crypto\.randomUUID\(\)/);
+  assert.match(source, /helpLevel:\s*reviewHelpLevel/);
+  assert.match(source, /idempotencyKey:\s*reviewAttemptKey/);
+});
