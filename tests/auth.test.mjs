@@ -5,8 +5,17 @@ import { authorizeAgentRequest, authorizeOwnerRequest } from "../lib/auth/access
 const config = { ownerEmail: "owner@example.com", agentApiKey: "agent-secret" };
 const request = (url, headers = {}) => new Request(url, { headers });
 
-test("loopback 缺少 secrets 时只允许本地开发", () => {
-  assert.equal(authorizeOwnerRequest(request("http://localhost:5173/api/dashboard"), {}), null);
+test("loopback 缺少 secrets 时需要显式本地开发许可", () => {
+  assert.equal(
+    authorizeOwnerRequest(request("http://localhost:5173/api/dashboard"), {}).status,
+    503,
+  );
+  assert.equal(
+    authorizeOwnerRequest(request("http://localhost:5173/api/dashboard"), {
+      allowLoopbackWithoutSecrets: true,
+    }),
+    null,
+  );
   assert.equal(
     authorizeOwnerRequest(request("https://trainer.example/api/dashboard"), {}).status,
     503,

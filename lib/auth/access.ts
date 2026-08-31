@@ -17,7 +17,7 @@ export function isLoopbackHost(hostname: string) {
 }
 
 const allowsLocalDevelopment = (request: Request, config: AccessConfig) =>
-  config.allowLoopbackWithoutSecrets !== false &&
+  config.allowLoopbackWithoutSecrets === true &&
   isLoopbackHost(new URL(request.url).hostname);
 
 export function authorizeOwnerRequest(request: Request, config: AccessConfig) {
