@@ -70,19 +70,15 @@ Dashboard、Agent 和提醒都调用 `buildDailyQueue`，因此在相同数据�
 
 仅追加 attempt 日志允许未来通过重放证据迁移策略，而不是只信任当前投影。导入会先完整校验并 dry-run 预览，再修改数据；现有比赛和题目会被跳过而不是覆盖。`training_settings.id=1` 也遵守 merge-only：当前设置存在时保留当前值，只有单例缺失时才写入备份设置。
 
-完整导出保持 v4，导入继续兼容 v1-v4。迁移历史保持 `0000`-`0004` 仅追加序列。
+完整导出为 v5，导入兼容 v1-v5；旧 attempt 的帮助等级和幂等键规范化为 `unknown`/`null`。迁移历史是 `0000`-`0005` 的仅追加序列。
 
 ## 集成边界
 
 通知渠道在 `lib/notifications/types.ts` 中实现 `NotificationProvider`。密钥只存在于部署环境变量，不能进入 D1、导出、日志或源代码。
 
-Agent 客户端可以：
+Coach 与 Trainer 是单向边界：Coach 只能调用 `getTrainingContext`（安全到期队列）、`setTrainingMode`（用户明确选择的模式）和 `submitTrainingEvidence`（经确认的单次证据）；Trainer 返回确定性回执和后续队列，始终自行计算排程。Coach 不保存或推断排程，不能提交任意复习日期、阶段、连续次数、遗忘次数、状态或迁移完整性。
 
-- 读取不含隐藏字段的到期队列；
-- 提交一种允许的证据值；
-- 请求解释后端的确定性决策。
-
-Agent 客户端不能提交任意复习日期、阶段、连续次数、遗忘次数、状态或迁移完整性。
+浏览器普通 API 只接受规范化后精确匹配 `TRAINER_OWNER_EMAIL` 的所有者会话；三个 Coach Actions 接受该所有者会话或正确的 `Authorization: Bearer AGENT_API_KEY`。Bearer key 不授予 Dashboard、导入或导出权限，且只存部署 secret 与 GPT 编辑器凭证，不进入 Instructions、D1、导出或日志。
 
 Codeforces 集成只使用公开的 `user.status` API，从候选数据中删除题目 tags，并要求用户确认 AC 的真实证据。在线评测 verdict 不能证明一次完成是独立、提示后还是参考题解后完成。
 

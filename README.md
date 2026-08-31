@@ -51,7 +51,7 @@ npm run db:migrate:local
 npm run dev
 ```
 
-`db:migrate:local` 只把仓库中既有的 `drizzle/0000`-`0004` 应用到已忽略的 `.wrangler/state`。它不会修改托管 D1，可以安全重复执行。
+`db:migrate:local` 只把仓库中既有的 `drizzle/0000`-`0005` 应用到已忽略的 `.wrangler/state`。它不会修改托管 D1，可以安全重复执行。
 
 常用检查：
 
@@ -92,6 +92,12 @@ docs/                 架构与交接状态
 | `GET` | `/api/agent/context` | 给模型读取无提示训练队列 |
 | `POST` | `/api/agent/evidence` | 给模型提交规范化训练证据 |
 | `GET` | `/api/openapi` | 获取 Agent API 的 OpenAPI 文档 |
+
+## ChatGPT 网页 Coach
+
+最短流程：部署并应用 `0005` → 设置 `TRAINER_OWNER_EMAIL` 和 `AGENT_API_KEY` 两个 secrets → 导入 `/api/openapi` → 粘贴 Coach 指令 → 先做脱敏冒烟。
+
+完整的指令、GPT 编辑器设置、凭证边界和冒烟顺序见 [`docs/chatgpt/xcpc-coach-setup.md`](docs/chatgpt/xcpc-coach-setup.md)。
 
 ## 下一阶段
 

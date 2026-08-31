@@ -1,4 +1,4 @@
-# 项目状态 — 2026-08-30
+# 项目状态 — 2026-08-31
 
 ## 当前可用
 
@@ -17,18 +17,19 @@
 - 正常、恢复、低能量三种每日上限
 - 比赛会话可关联多道暴露题
 - Codeforces 公开提交预览、证据确认和符合规则的重新激活
-- v4 JSON 完整导出，以及 v1-v4 merge-only 导入兼容
+- v5 JSON 完整导出，以及 v1-v5 merge-only 导入兼容
 - 设置导入不会覆盖现有 `training_settings.id=1`
-- D1 schema 与五个已生成的仅追加 migrations
+- D1 schema 与 `0000`-`0005` 六个已生成的仅追加 migrations
 - 提醒任务去重与 provider-neutral 通知契约
-- 带鉴权的 Agent API 和 OpenAPI 契约，包括迁移候选与创建入口
+- 带鉴权的三个 Coach Actions 与 OpenAPI 契约：读取上下文、显式切换模式、提交幂等证据
 - Dashboard 与 Agent 盲做 DTO 使用精确字段白名单
 - 相同优先级和到期时间的队列项使用稳定数值 ID 决胜
 - `npm test`、`npm run lint`、`npm run dev` 等工作流可在原生 Windows 和 POSIX 环境启动，不要求预装 Bash
+- Coach 指令与 GPT 编辑器配置文档已就绪；远程 migration、Site secrets、GPT 创建和脱敏冒烟均待执行
 
 ## 验证基线
 
-- `npm test`：生产构建成功，34 个测试通过
+- `npm test`：本分支验证时确认生产构建成功、全部测试通过
 - `npm run lint`：无错误
 - `npm run db:generate`：No schema changes
 - 排程反例、迁移完整性、旧备份、队列优先级与 ID 决胜、盲做精确字段、重新激活、merge-only 设置和迁移序列都有确定性测试
@@ -41,7 +42,7 @@
 2. 安装 Node.js 22 或更新版本。
 3. 在 VS Code 或 Codex 中打开仓库目录。
 4. 运行 `npm ci`。
-5. 运行 `npm run db:migrate:local`，把既有 migrations 应用到本地 D1。
+5. 运行 `npm run db:migrate:local`，把既有 `0000`-`0005` migrations 应用到本地 D1。
 6. 运行 `npm test` 与 `npm run lint`，确认本机基线。
 7. 运行 `npm run dev` 启动本地版本。
 8. 修改项目前先完整阅读 `AGENTS.md`。
@@ -62,16 +63,14 @@ origin  https://github.com/jianhuowang/xcpc_trainer.git
 ## 下一实施顺序
 
 1. 先实际使用当前个人闭环，并继续收集有效盲做与迁移证据；在同时满足至少 4 周和至少 30 次有效尝试前，不调整 3/7/21/45 天间隔。
-2. 编写 evidence 完整性规格并实现稳定 `idempotencyKey`、持久唯一约束和最大帮助等级；只追加 migration，并明确下一版完整导出。
-3. evidence 幂等完成后，再扩大远程 Agent API 联调范围。
+2. controller 先备份远程数据、应用远程 `0005_evidence_integrity`，再设置两个 Site secrets 并重新部署。
+3. controller 创建专用 GPT，导入 `/api/openapi`，配置 Bearer key，并完成脱敏幂等冒烟；上述远程步骤尚未执行。
 4. 单独实现比赛四向分流、候选池和归档，先解决中立题目身份，再决定 migration 与导出版本。
-5. Coach 行动层优先复用现有 Agent API；新题和微专题第一版保持会话级，不建立第二套排程器。
-6. Vault 对接从用户确认的 Markdown 预览、复制或下载开始；不自动同步或反向写排程。
+5. Vault 对接从用户确认的 Markdown 预览、复制或下载开始；不自动同步或反向写排程。
 
 ## 明确未做
 
 - 没有在个人证据足够前引入 FSRS 或模型选择日期
-- 没有 evidence 幂等持久键或 H1-H3 最大帮助字段
 - 没有候选池、归档和正式比赛四向分流结构
 - 没有自动周复盘投递和真实通知 provider 凭据
 - 没有自动抓取或转发 GPT 等聊天网页 Cookie
@@ -79,3 +78,4 @@ origin  https://github.com/jianhuowang/xcpc_trainer.git
 - 不会把在线评测 AC 自动视为 `independent_ac`
 - 没有公开多用户写入
 - 没有破坏性备份恢复
+- 尚未在远程应用 `0005`、设置 Site secrets、创建专用 GPT 或完成脱敏 Action 冒烟
