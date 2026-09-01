@@ -24,6 +24,11 @@ test("公开 OpenAPI 只暴露三个 Coach operations", () => {
   ).sort(), ["getTrainingContext", "setTrainingMode", "submitTrainingEvidence"]);
 });
 
+test("公开 OpenAPI 为 GPT 编辑器提供对象形式的 components.schemas", () => {
+  const api = buildAgentOpenApi("https://trainer.example");
+  assert.deepEqual(api.components.schemas, {});
+});
+
 test("证据 Action 只接受证据字段，不接受排程字段", () => {
   const api = buildAgentOpenApi("https://trainer.example");
   const schema = api.paths["/api/agent/evidence"].post.requestBody

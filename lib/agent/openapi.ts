@@ -112,6 +112,7 @@ export function buildAgentOpenApi(origin: string) {
       },
     },
     components: {
+      schemas: {},
       securitySchemes: { bearerAuth: { type: "http", scheme: "bearer" } },
     },
   } as const;
