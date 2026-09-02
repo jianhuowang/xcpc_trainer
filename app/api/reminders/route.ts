@@ -1,6 +1,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { problems, reminderJobs, trainingSettings } from "@/db/schema";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import { buildReminderText, type NotificationChannel } from "@/lib/notifications/types";
 import { createReminderCandidate } from "@/lib/notifications/reminders";
 import { buildDailyQueue, isTrainingMode, MODE_CONFIG } from "@/lib/training/modes";
@@ -32,6 +33,8 @@ async function reminderSnapshot(request: Request, channel: NotificationChannel) 
 }
 
 export async function GET(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  if (unauthorized) return unauthorized;
   try {
     const { db, mode, allDue, selected, candidate } = await reminderSnapshot(request, "email");
     const jobs = await db.select().from(reminderJobs).orderBy(desc(reminderJobs.createdAt)).limit(8);
@@ -52,6 +55,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  if (unauthorized) return unauthorized;
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const requested = String(body.channel ?? "email") as NotificationChannel;

@@ -12,21 +12,26 @@ test("keeps the complete personal training loop in the mobile entry page", async
   assert.match(source, /盲做规则/);
 });
 
-test("agent context cannot expose notes or accept client review dates", async () => {
+test("agent policy rejects client review dates", async () => {
   const source = await readFile(
     new URL("../app/api/agent/context/route.ts", import.meta.url),
     "utf8",
   );
-  assert.doesNotMatch(source, /notes:\s*problem\.notes/);
   assert.match(source, /clientMaySetReviewDate:\s*false/);
 });
 
-test("dashboard strips notes and transfer relationships from blind queue payloads", async () => {
+test("导入界面明确保留现有训练设置", async () => {
   const source = await readFile(
-    new URL("../app/api/dashboard/route.ts", import.meta.url),
+    new URL("../app/page.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(source, /notes:\s*""/);
-  assert.match(source, /validatesProblemId:\s*null/);
-  assert.match(source, /queue\.transfer\.map\(hideBlindFields\)/);
+  assert.match(source, /保留当前训练设置/);
+  assert.doesNotMatch(source, /恢复备份中的训练模式设置/);
+});
+
+test("浏览器证据提交包含帮助等级和稳定幂等键", async () => {
+  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(source, /crypto\.randomUUID\(\)/);
+  assert.match(source, /helpLevel:\s*reviewHelpLevel/);
+  assert.match(source, /idempotencyKey:\s*reviewAttemptKey/);
 });

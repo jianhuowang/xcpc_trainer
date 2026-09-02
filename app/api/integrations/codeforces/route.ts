@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { attempts, problems } from "@/db/schema";
-import { requireAgentAccess } from "@/lib/agent/auth";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import {
   groupCodeforcesSubmissions,
   type CodeforcesSubmission,
@@ -12,7 +12,7 @@ import { shouldReactivateProblem } from "@/lib/training/reactivation";
 const HANDLE_PATTERN = /^[A-Za-z0-9_.-]{3,30}$/;
 
 export async function GET(request: Request) {
-  const unauthorized = requireAgentAccess(request);
+  const unauthorized = requireOwnerAccess(request);
   if (unauthorized) return unauthorized;
 
   try {
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const unauthorized = requireAgentAccess(request);
+  const unauthorized = requireOwnerAccess(request);
   if (unauthorized) return unauthorized;
 
   try {

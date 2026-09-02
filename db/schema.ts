@@ -66,6 +66,8 @@ export const attempts = sqliteTable(
       .references(() => problems.id, { onDelete: "cascade" }),
     context: text("context").notNull().default("initial"),
     evidence: text("evidence").notNull(),
+    helpLevel: text("help_level").notNull().default("unknown"),
+    idempotencyKey: text("idempotency_key"),
     previousStage: integer("previous_stage").notNull().default(0),
     nextStage: integer("next_stage").notNull().default(0),
     scheduledAt: text("scheduled_at"),
@@ -73,7 +75,10 @@ export const attempts = sqliteTable(
     notes: text("notes").notNull().default(""),
     attemptedAt: text("attempted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index("attempts_problem_idx").on(table.problemId)],
+  (table) => [
+    index("attempts_problem_idx").on(table.problemId),
+    uniqueIndex("attempts_idempotency_key_unique").on(table.idempotencyKey),
+  ],
 );
 
 export const trainingSettings = sqliteTable("training_settings", {

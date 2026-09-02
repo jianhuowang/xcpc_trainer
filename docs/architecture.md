@@ -1,6 +1,6 @@
-# Architecture
+# 架构
 
-## Core loop
+## 核心闭环
 
 ```mermaid
 flowchart TD
@@ -12,66 +12,76 @@ flowchart TD
   F -->|再次暴露| C
 ```
 
-The model boundary is outside this loop: a web chat, API model, or MCP client may read the queue and submit one of the allowed evidence values. Only `lib/training/scheduler.ts` calculates the next state and date.
+模型边界位于这个闭环之外。网页聊天、API 模型或 MCP 客户端可以读取队列，并提交一种允许的证据值；只有 `lib/training/scheduler.ts` 可以计算下一状态和日期。
 
-The current version implements low-frequency retention plus explicitly linked transfer tasks. Contest-level reactivation and automatic transfer recommendation remain later product layers. Repeating the same problem never creates a permanent terminal state.
+当前版本实现了低频同题保持和显式关联的迁移任务。比赛级重新激活和自动迁移题推荐仍属于后续产品层；重复同一道题永远不会产生永久终态。
 
-## Evidence state machine
+## 证据状态机
 
-`reviewStage` is the current same-problem retention rung. `cleanStreak` records consecutive independent completions since the last failed, editorial-assisted, or hinted attempt. `lapseCount` records cumulative failed attempts for later policy analysis.
+`reviewStage` 表示当前同题保持阶梯，`cleanStreak` 记录最近一次失败、参考题解或使用提示之后连续独立完成的次数，`lapseCount` 累计失败次数，供后续策略分析。
 
-| Evidence | Clean streak | Result | Next training | Meaning |
+| 证据 | 连续独立次数 | 结果 | 下次训练 | 含义 |
 |---|---:|---|---:|---|
-| `failed` | reset to 0 | `upsolve`, stage 0 | 1 local day | The solution could not be independently reconstructed. |
-| `editorial_understood` | reset to 0 | `review`, stage 0 | 2 local days | Understanding after exposure still needs a blind attempt. |
-| `hinted_ac` | reset to 0 | `review`, stage 0 | 3 local days | A hint helped; independence remains unverified. |
-| first `independent_ac` | 1 | `review`, stage 1 | 3 local days | First clean reconstruction. |
-| second `independent_ac` | 2 | `review`, stage 2 | 7 local days | Second consecutive clean reconstruction. |
-| third `independent_ac` | 3 | `review`, stage 3 | 21 local days | Retention is strong but transfer remains unknown. |
-| fourth `independent_ac` | 4 | `retained`, stage 4 | 45 local days | Low-frequency same-problem maintenance, not permanent mastery. |
+| `failed` | 清零 | `upsolve`，阶段 0 | 1 个本地日 | 无法独立重建解法。 |
+| `editorial_understood` | 清零 | `review`，阶段 0 | 2 个本地日 | 接触题解后形成理解，仍需盲做验证。 |
+| `hinted_ac` | 清零 | `review`，阶段 0 | 3 个本地日 | 提示帮助完成，独立性仍未验证。 |
+| 第一次 `independent_ac` | 1 | `review`，阶段 1 | 3 个本地日 | 第一次完整独立重建。 |
+| 第二次 `independent_ac` | 2 | `review`，阶段 2 | 7 个本地日 | 第二次连续独立重建。 |
+| 第三次 `independent_ac` | 3 | `review`，阶段 3 | 21 个本地日 | 保持较强，但迁移能力仍未知。 |
+| 第四次 `independent_ac` | 4 | `retained`，阶段 4 | 45 个本地日 | 低频同题保持，不代表永久掌握。 |
 
-After retention, the user or an agent may link an unseen transfer problem. The due card hides the source relationship. A first-attempt `independent_ac` marks the transfer and its source `stable`. Any other first-attempt evidence changes the transfer integrity to `exposed`; later ACs are ordinary same-problem reviews and cannot create transfer evidence.
+进入保持后，用户或 Agent 可以关联一道未见迁移题。作答卡隐藏其来源关系；只有第一次尝试的 `independent_ac` 才能把迁移题及原题推进到 `stable`。其他第一次证据会把迁移完整性改为 `exposed`，之后的 AC 只能作为普通同题复习，不能再形成迁移证据。
 
-A retained or stable problem is reactivated when the same tracked problem later receives failed, editorial-assisted, or hinted evidence. Manual capture and Codeforces sync both apply this rule. An independent AC does not reopen an already stable record.
+`retained` 或 `stable` 题收到新的失败、参考题解或提示证据时会重新激活。手动录入和 Codeforces 同步都遵守此规则；已经处于 `stable` 的题再次独立完成只追加 attempt，保持 `stable` 且不建立新的复习日期。
 
-All due timestamps are midnight in `Asia/Shanghai` after the configured number of local calendar days. They are stored as ISO UTC values.
+所有到期时间都按 `Asia/Shanghai` 本地日历计算，在目标日 00:00 到期，并以 UTC ISO 时间存储。
 
-## Queue policy
+## 队列策略
 
-The daily queue contains due `upsolve`, `review`, and `retained` records. It is ordered as follows:
+每日队列包含到期的 `upsolve`、`review`、`retained` 和未见迁移记录，依次按以下规则排序：
 
-1. due upsolve debt, oldest due first;
-2. unseen transfer checks, oldest due first;
-3. due blind review and retention, oldest due first;
-4. apply the active daily cap after prioritization.
+1. 到期补题债务，最早到期优先；
+2. 未完成的迁移验证，最早到期优先；
+3. 到期盲做复习与保持，最早到期优先；
+4. 状态和到期时间相同时，以稳定数值 ID 升序决胜；
+5. 完成全部排序后，再应用活动模式的每日上限。
 
-Normal, recovery, and low-energy modes cap the selected queue at 6, 4, and 2 tasks. Excess debt remains due and visible in the deferred count.
+正常、恢复、低能量模式分别把可用集限制为 6、4、2 项。超出的到期项保持到期，并计入 deferred 数量。
 
-## Persistence
+Dashboard、Agent 和提醒都调用 `buildDailyQueue`，因此在相同数据、时间截点和活动模式下得到同一顺序。
 
-- `problems` stores the current projection state for fast queue reads.
-- `attempts` is an append-only evidence history.
-- `contests` groups the real event that exposed a set of problems.
-- `training_settings` stores the selected daily-load mode and reminder preferences.
-- `reminder_jobs` stores one deduplicated delivery intent per date and channel.
-- `/api/export` exports contests, problems, attempts, and settings in a versioned JSON envelope.
+## 盲做投影
 
-The append-only attempt log allows future policy migrations to replay evidence instead of trusting only the current projection. Imports run a full validation and dry-run preview before mutating state. Existing records are skipped rather than overwritten.
+数据库行不会直接展开到盲做响应。`lib/training/projection.ts` 提供两个显式白名单：
 
-## Integration boundaries
+- Dashboard 题目只含 `id`、`title`、`url`、`platform`、`origin`、`status`、`cleanStreak` 和 `nextReviewAt`；
+- Agent 到期题只含 `id`、`title`、`url`、`platform`、`origin`、`reviewStage`、`queueType` 和 `dueAt`。
 
-Notification providers implement `NotificationProvider` in `lib/notifications/types.ts`. Secrets stay in deployment environment variables and never enter D1, exports, logs, or source control.
+`notes`、`lastEvidence`、`validatesProblemId`、`transferIntegrity`、算法标签、题解和历史解法不会出现在这些 DTO 中。运行时测试比较精确字段集合，因此以后数据库行增加字段也不会自动穿透。
 
-Agent clients may:
+## 持久化
 
-- read the due queue without hidden notes;
-- submit one of the allowed evidence values;
-- request an explanation of the deterministic decision.
+- `problems` 保存当前状态投影，供队列快速读取。
+- `attempts` 保存仅追加的证据历史。
+- `contests` 关联一场真实事件暴露出的题目。
+- `training_settings` 保存活动负荷模式和提醒偏好。
+- `reminder_jobs` 按日期和渠道保存去重后的投递意图。
+- `/api/export` 以带版本的 JSON 包导出比赛、题目、attempts 和设置。
 
-They may never submit an arbitrary review date, stage, clean streak, lapse count, or status.
+仅追加 attempt 日志允许未来通过重放证据迁移策略，而不是只信任当前投影。导入会先完整校验并 dry-run 预览，再修改数据；现有比赛和题目会被跳过而不是覆盖。`training_settings.id=1` 也遵守 merge-only：当前设置存在时保留当前值，只有单例缺失时才写入备份设置。
 
-Codeforces integration uses the public `user.status` endpoint, strips problem tags from candidate data, and requires confirmation for accepted submissions. An online judge verdict cannot establish whether a solution was independent, hinted, or editorial-assisted.
+完整导出为 v5，导入兼容 v1-v5；旧 attempt 的帮助等级和幂等键规范化为 `unknown`/`null`。迁移历史是 `0000`-`0005` 的仅追加序列。
 
-## Public multi-user boundary
+## 集成边界
 
-The current deployment is owner-only. Before a public multi-user release, add server-side user identity, user IDs on every durable table, row-level authorization in every route, abuse limits, audit logging, and an export/delete flow per user. Do not make the existing personal API public first and add isolation later.
+通知渠道在 `lib/notifications/types.ts` 中实现 `NotificationProvider`。密钥只存在于部署环境变量，不能进入 D1、导出、日志或源代码。
+
+Coach 与 Trainer 是单向边界：Coach 只能调用 `getTrainingContext`（安全到期队列）、`setTrainingMode`（用户明确选择的模式）和 `submitTrainingEvidence`（经确认的单次证据）；Trainer 返回确定性回执和后续队列，始终自行计算排程。Coach 不保存或推断排程，不能提交任意复习日期、阶段、连续次数、遗忘次数、状态或迁移完整性。
+
+浏览器普通 API 只接受规范化后精确匹配 `TRAINER_OWNER_EMAIL` 的所有者会话；三个 Coach Actions 接受该所有者会话或正确的 `Authorization: Bearer AGENT_API_KEY`。Bearer key 不授予 Dashboard、导入或导出权限，且只存部署 secret 与 GPT 编辑器凭证，不进入 Instructions、D1、导出或日志。
+
+Codeforces 集成只使用公开的 `user.status` API，从候选数据中删除题目 tags，并要求用户确认 AC 的真实证据。在线评测 verdict 不能证明一次完成是独立、提示后还是参考题解后完成。
+
+## 公开多用户边界
+
+当前部署仅供所有者本人使用。发布可写的多用户版本前，必须增加服务端用户身份、所有持久表的 user ID、每个路由的行级授权、滥用限制、审计日志，以及按用户导出和删除数据的流程。不能先公开当前个人 API，再补数据隔离。

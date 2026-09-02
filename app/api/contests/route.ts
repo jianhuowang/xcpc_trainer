@@ -1,13 +1,13 @@
 import { desc, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { attempts, contests, problems } from "@/db/schema";
-import { requireAgentAccess } from "@/lib/agent/auth";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import { isSolveEvidence, scheduleNextReview } from "@/lib/training/scheduler";
 
 const PLATFORMS = new Set(["codeforces", "nowcoder", "atcoder", "luogu", "other"]);
 
 export async function GET(request: Request) {
-  const unauthorized = requireAgentAccess(request);
+  const unauthorized = requireOwnerAccess(request);
   if (unauthorized) return unauthorized;
   try {
     const db = getDb();
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const unauthorized = requireAgentAccess(request);
+  const unauthorized = requireOwnerAccess(request);
   if (unauthorized) return unauthorized;
   try {
     const body = (await request.json()) as Record<string, unknown>;

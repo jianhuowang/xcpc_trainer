@@ -57,6 +57,7 @@ type Evidence =
   | "editorial_understood"
   | "hinted_ac"
   | "independent_ac";
+type HelpLevel = "none" | "h1" | "h2" | "h3" | "unknown";
 
 type Problem = {
   id: number;
@@ -65,17 +66,8 @@ type Problem = {
   platform: string;
   origin: string;
   status: string;
-  reviewStage: number;
   cleanStreak: number;
-  lapseCount: number;
-  trainingRole: string;
-  validatesProblemId: number | null;
-  transferIntegrity: string;
   nextReviewAt: string | null;
-  lastEvidence: Evidence | "assigned_transfer";
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
 };
 
 type DashboardData = {
@@ -218,7 +210,9 @@ export default function Home() {
   const [contestForm, setContestForm] = useState(newContestForm);
   const [reviewEvidence, setReviewEvidence] =
     useState<Evidence>("independent_ac");
+  const [reviewHelpLevel, setReviewHelpLevel] = useState<HelpLevel>("none");
   const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewAttemptKey, setReviewAttemptKey] = useState("");
   const [transferForm, setTransferForm] = useState({
     title: "",
     url: "",
@@ -287,6 +281,26 @@ export default function Home() {
     }
   }
 
+  function beginReview(problem: Problem) {
+    setReviewing(problem);
+    setReviewEvidence("independent_ac");
+    setReviewHelpLevel("none");
+    setReviewNotes("");
+    setReviewAttemptKey(crypto.randomUUID());
+  }
+
+  function closeReview() {
+    setReviewing(null);
+    setReviewAttemptKey("");
+  }
+
+  function changeReviewEvidence(evidence: Evidence) {
+    setReviewEvidence(evidence);
+    if (evidence === "independent_ac") setReviewHelpLevel("none");
+    if (evidence === "hinted_ac") setReviewHelpLevel("h1");
+    if (evidence === "editorial_understood") setReviewHelpLevel("h3");
+  }
+
   async function submitReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!reviewing) return;
@@ -298,34 +312,19 @@ export default function Home() {
         body: JSON.stringify({
           problemId: reviewing.id,
           evidence: reviewEvidence,
+          helpLevel: reviewHelpLevel,
           notes: reviewNotes,
+          idempotencyKey: reviewAttemptKey,
         }),
       });
       const result = await readJson(response);
-      const decision = result.decision as {
-        reason?: string;
-        status?: string;
-      } | undefined;
-      const transferValidation = result.transferValidation;
-      if (transferValidation === "verified") {
-        toast.success("迁移验证通过", { description: decision?.reason });
-      } else if (transferValidation === "invalidated") {
-        toast.info("本题已暴露，不再作为迁移证据", {
-          description: `${decision?.reason ?? "结果已记录"}；原题仍保持待验证状态，之后需要换一道陌生题。`,
-        });
-      } else if (transferValidation === "already_exposed") {
-        toast.info("按同题重做记录", {
-          description: `${decision?.reason ?? "结果已记录"}；它已经不是陌生题，因此不会改变原题的迁移状态。`,
-        });
-      } else {
-        toast.success(
-          decision?.status === "retained" ? "进入低频保持" : "下次训练已排好",
-          { description: decision?.reason },
-        );
-      }
-      setReviewing(null);
+      toast.success("下次训练已排好", {
+        description: typeof result.scheduleReason === "string" ? result.scheduleReason : undefined,
+      });
+      closeReview();
       setReviewNotes("");
       setReviewEvidence("independent_ac");
+      setReviewHelpLevel("none");
       setLoading(true);
       await loadDashboard();
     } catch (cause) {
@@ -567,7 +566,7 @@ export default function Home() {
                     description="失败题优先；建立完整解法后再回到盲重做。"
                     items={dashboard.queues.upsolve}
                     startIndex={0}
-                    onReview={setReviewing}
+                    onReview={beginReview}
                   />
                 ) : null}
                 {dashboard.queues.transfer.length ? (
@@ -576,7 +575,7 @@ export default function Home() {
                     description="它与旧题的关联已经隐藏；第一次作答必须保持完全陌生。"
                     items={dashboard.queues.transfer}
                     startIndex={dashboard.queues.upsolve.length}
-                    onReview={setReviewing}
+                    onReview={beginReview}
                   />
                 ) : null}
                 {dashboard.queues.review.length ? (
@@ -587,7 +586,7 @@ export default function Home() {
                     startIndex={
                       dashboard.queues.upsolve.length + dashboard.queues.transfer.length
                     }
-                    onReview={setReviewing}
+                    onReview={beginReview}
                   />
                 ) : null}
               </div>
@@ -768,9 +767,11 @@ export default function Home() {
 
       <ReviewDialog
         problem={reviewing}
-        onClose={() => setReviewing(null)}
+        onClose={closeReview}
         evidence={reviewEvidence}
-        setEvidence={setReviewEvidence}
+        setEvidence={changeReviewEvidence}
+        helpLevel={reviewHelpLevel}
+        setHelpLevel={setReviewHelpLevel}
         notes={reviewNotes}
         setNotes={setReviewNotes}
         onSubmit={submitReview}
@@ -1149,6 +1150,7 @@ type ImportPreview = {
   contests: { add: number; skip: number };
   problems: { add: number; skip: number };
   attempts: { add: number };
+  settings: { add: number; skip: number };
 };
 
 function ImportDialog({ onImported }: { onImported: () => void }) {
@@ -1244,7 +1246,10 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
               <ImportMetric label="尝试记录" value={preview.attempts.add} />
             </div>
             <p className="mt-3 text-xs leading-5 text-muted-foreground">
-              将跳过 {preview.contests.skip} 场重复比赛和 {preview.problems.skip} 道重复题，并恢复备份中的训练模式设置。
+              将跳过 {preview.contests.skip} 场重复比赛和 {preview.problems.skip} 道重复题；
+              {preview.settings.skip
+                ? "保留当前训练设置。"
+                : "写入备份中的训练设置。"}
             </p>
           </div>
         ) : null}
@@ -1615,6 +1620,8 @@ function ReviewDialog({
   onClose,
   evidence,
   setEvidence,
+  helpLevel,
+  setHelpLevel,
   notes,
   setNotes,
   onSubmit,
@@ -1624,6 +1631,8 @@ function ReviewDialog({
   onClose: () => void;
   evidence: Evidence;
   setEvidence: (value: Evidence) => void;
+  helpLevel: HelpLevel;
+  setHelpLevel: (value: HelpLevel) => void;
   notes: string;
   setNotes: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1655,6 +1664,21 @@ function ReviewDialog({
                 </button>
               ))}
             </div>
+          </Field>
+          <Field label="本次实际使用的帮助等级">
+            <Select
+              value={helpLevel}
+              onValueChange={(value) => setHelpLevel(value as HelpLevel)}
+            >
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">none</SelectItem>
+                <SelectItem value="h1">H1</SelectItem>
+                <SelectItem value="h2">H2</SelectItem>
+                <SelectItem value="h3">H3</SelectItem>
+                <SelectItem value="unknown">unknown</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="本次复盘（可选）">
             <Textarea

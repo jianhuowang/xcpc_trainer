@@ -1,8 +1,11 @@
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { attempts, contests, problems, trainingSettings } from "@/db/schema";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  if (unauthorized) return unauthorized;
   try {
     const db = getDb();
     const [contestRows, problemRows, attemptRows, settingsRows] = await Promise.all([
@@ -22,7 +25,7 @@ export async function GET() {
       JSON.stringify(
         {
           format: "xcpc-trainer-export",
-          version: 4,
+          version: 5,
           exportedAt,
           policy: {
             failed: 1,

@@ -25,6 +25,9 @@ const TRANSFER_INTEGRITIES = new Set([
   "verified",
 ]);
 const MODES = new Set(["normal", "recovery", "low_energy"]);
+export const HELP_LEVELS = ["none", "h1", "h2", "h3", "unknown"] as const;
+const HELP_LEVEL_SET = new Set<string>(HELP_LEVELS);
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 
 type SolveEvidence =
   | "failed"
@@ -33,6 +36,7 @@ type SolveEvidence =
   | "independent_ac";
 type LastEvidence = SolveEvidence | "assigned_transfer";
 type TrainingMode = "normal" | "recovery" | "low_energy";
+export type HelpLevel = (typeof HELP_LEVELS)[number];
 
 function isSolveEvidence(value: unknown): value is SolveEvidence {
   return typeof value === "string" && EVIDENCE.has(value);
@@ -40,6 +44,22 @@ function isSolveEvidence(value: unknown): value is SolveEvidence {
 
 function isTrainingMode(value: unknown): value is TrainingMode {
   return typeof value === "string" && MODES.has(value);
+}
+
+function helpLevelValue(value: unknown, version: number): HelpLevel {
+  if (version < 5) return "unknown";
+  if (typeof value !== "string" || !HELP_LEVEL_SET.has(value)) {
+    throw new Error("尝试记录的帮助等级无效。");
+  }
+  return value as HelpLevel;
+}
+
+function idempotencyKeyValue(value: unknown, version: number) {
+  if (version < 5 || value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string" || !IDEMPOTENCY_KEY.test(value)) {
+    throw new Error("尝试记录的幂等键无效。");
+  }
+  return value;
 }
 
 export type ImportedContest = {
@@ -85,10 +105,12 @@ export type ImportedAttempt = {
   scheduleReason: string;
   notes: string;
   attemptedAt: string;
+  helpLevel: HelpLevel;
+  idempotencyKey: string | null;
 };
 
 export type ImportBundle = {
-  version: 1 | 2 | 3 | 4;
+  version: 1 | 2 | 3 | 4 | 5;
   contests: ImportedContest[];
   problems: ImportedProblem[];
   attempts: ImportedAttempt[];
@@ -150,13 +172,17 @@ export function contestIdentity(input: {
   return `title:${input.title.trim().toLowerCase()}:${input.startedAt.slice(0, 10)}`;
 }
 
+export function settingsMergePreview(existing: boolean) {
+  return existing ? { add: 0, skip: 1 } : { add: 1, skip: 0 };
+}
+
 export function parseImportBundle(input: unknown): ImportBundle {
   const envelope = record(input);
   if (envelope.format !== "xcpc-trainer-export") {
     throw new Error("这不是 XCPC Trainer 导出的备份。 ");
   }
   const version = integerValue(envelope.version, -1);
-  if (version !== 1 && version !== 2 && version !== 3 && version !== 4) {
+  if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5) {
     throw new Error("暂不支持这个备份版本。");
   }
 
@@ -273,8 +299,17 @@ export function parseImportBundle(input: unknown): ImportBundle {
       scheduleReason: stringValue(row.scheduleReason, "", 1000),
       notes: stringValue(row.notes),
       attemptedAt: dateValue(row.attemptedAt, now) ?? now,
+      helpLevel: helpLevelValue(row.helpLevel, version),
+      idempotencyKey: idempotencyKeyValue(row.idempotencyKey, version),
     };
   });
+
+  const keys = attempts
+    .map((attempt) => attempt.idempotencyKey)
+    .filter((key): key is string => key !== null);
+  if (new Set(keys).size !== keys.length) {
+    throw new Error("备份内存在重复幂等键。");
+  }
 
   const rawSettings = envelope.settings ? record(envelope.settings) : {};
   const mode = isTrainingMode(rawSettings.mode) ? rawSettings.mode : "normal";

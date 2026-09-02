@@ -1,31 +1,50 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { attempts, problems } from "@/db/schema";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import {
-  isSolveEvidence,
-  scheduleNextReview,
-} from "@/lib/training/scheduler";
+  parseEvidenceSubmission,
+  sameEvidenceSubmission,
+  toEvidenceReceipt,
+  type EvidenceSubmission,
+} from "@/lib/training/evidence";
+import { scheduleProblemEvidence } from "@/lib/training/reactivation";
 import { classifyTransferAttempt } from "@/lib/training/transfer";
 
-export async function POST(request: Request) {
+function isIdempotencyKeyConflict(error: unknown) {
+  return error instanceof Error && error.message.includes("attempts.idempotency_key");
+}
+
+export async function recordEvidence(request: Request) {
   try {
-    const body = (await request.json()) as Record<string, unknown>;
-    const problemId = Number(body.problemId);
-    const notes = typeof body.notes === "string" ? body.notes.trim() : "";
-
-    if (!Number.isInteger(problemId) || problemId <= 0) {
-      return Response.json({ error: "无效的题目编号。" }, { status: 400 });
+    const body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return Response.json({ error: "证据请求必须是对象。" }, { status: 400 });
     }
-
-    if (!isSolveEvidence(body.evidence)) {
-      return Response.json({ error: "请选择有效的重做结果。" }, { status: 400 });
-    }
+    const parsed = parseEvidenceSubmission(body as Record<string, unknown>);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    const input = parsed.value;
 
     const db = getDb();
+    const replayResponse = async (submission: EvidenceSubmission) => {
+      const [existing] = await getDb()
+        .select()
+        .from(attempts)
+        .where(eq(attempts.idempotencyKey, submission.idempotencyKey))
+        .limit(1);
+      if (!existing) return null;
+      if (!sameEvidenceSubmission(existing as EvidenceSubmission, submission)) {
+        return Response.json({ error: "相同幂等键携带了不同证据。" }, { status: 409 });
+      }
+      return Response.json(toEvidenceReceipt(existing, true));
+    };
+    const replay = await replayResponse(input);
+    if (replay) return replay;
+
     const [problem] = await db
       .select()
       .from(problems)
-      .where(eq(problems.id, problemId))
+      .where(eq(problems.id, input.problemId))
       .limit(1);
 
     if (!problem) {
@@ -45,7 +64,7 @@ export async function POST(request: Request) {
     const transferAttempt = classifyTransferAttempt({
       trainingRole: problem.trainingRole,
       transferIntegrity: problem.transferIntegrity,
-      evidence: body.evidence,
+      evidence: input.evidence,
     });
     const verifiesTransfer = transferAttempt === "verified";
     const [sourceProblem] = problem.validatesProblemId
@@ -74,14 +93,13 @@ export async function POST(request: Request) {
           reason:
             "首次接触的无标签迁移题已独立完成：原训练题获得迁移证据，进入稳定状态。",
         }
-      : scheduleNextReview({
-          currentStage: problem.reviewStage,
-          currentCleanStreak:
-            problem.cleanStreak === 0 && problem.lastEvidence === "independent_ac"
-              ? problem.reviewStage
-              : problem.cleanStreak,
-          currentLapseCount: problem.lapseCount,
-          evidence: body.evidence,
+      : scheduleProblemEvidence({
+          status: problem.status,
+          reviewStage: problem.reviewStage,
+          cleanStreak: problem.cleanStreak,
+          lapseCount: problem.lapseCount,
+          lastEvidence: problem.lastEvidence,
+          evidence: input.evidence,
         });
     const nextTransferIntegrity = isTransfer
       ? verifiesTransfer
@@ -100,59 +118,53 @@ export async function POST(request: Request) {
         lapseCount: decision.lapseCount,
         transferIntegrity: nextTransferIntegrity,
         nextReviewAt: decision.dueAt,
-        lastEvidence: body.evidence,
+        lastEvidence: input.evidence,
         updatedAt: now,
       })
-      .where(eq(problems.id, problemId))
+      .where(eq(problems.id, input.problemId))
       .returning();
     const insertAttempt = db.insert(attempts).values({
-      problemId,
+      problemId: input.problemId,
       context: verifiesTransfer
         ? "transfer_verified"
         : isTransfer
           ? "transfer"
           : "review",
-      evidence: body.evidence,
+      evidence: input.evidence,
+      helpLevel: input.helpLevel,
+      idempotencyKey: input.idempotencyKey,
       previousStage: problem.reviewStage,
       nextStage: decision.reviewStage,
       scheduledAt: decision.dueAt,
       scheduleReason: decision.reason,
-      notes,
-    });
-    let updatedRows;
-    if (verifiesTransfer && sourceProblem) {
-      const updateSource = db
-        .update(problems)
-        .set({
-          status: "stable",
-          nextReviewAt: null,
-          updatedAt: now,
-        })
-        .where(eq(problems.id, sourceProblem.id));
-      [updatedRows] = await db.batch([
-        updateProblem,
-        updateSource,
-        insertAttempt,
-      ]);
-    } else {
-      [updatedRows] = await db.batch([updateProblem, insertAttempt]);
+      notes: input.notes,
+    }).returning();
+    try {
+      const result = verifiesTransfer && sourceProblem
+        ? await db.batch([
+            insertAttempt,
+            updateProblem,
+            db
+              .update(problems)
+              .set({ status: "stable", nextReviewAt: null, updatedAt: now })
+              .where(eq(problems.id, sourceProblem.id)),
+          ])
+        : await db.batch([insertAttempt, updateProblem]);
+      const [inserted] = result[0];
+      return Response.json(toEvidenceReceipt(inserted, false));
+    } catch (error) {
+      if (isIdempotencyKeyConflict(error)) {
+        const racedReplay = await replayResponse(input);
+        if (racedReplay) return racedReplay;
+      }
+      throw error;
     }
-    const [updated] = updatedRows;
-
-    return Response.json({
-      problem: updated,
-      decision,
-      transferValidation:
-        transferAttempt === "verified"
-          ? "verified"
-          : transferAttempt === "invalidated"
-            ? "invalidated"
-            : transferAttempt === "already_exposed"
-              ? "already_exposed"
-              : null,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "更新失败";
-    return Response.json({ error: message }, { status: 500 });
+  } catch {
+    return Response.json({ error: "更新失败" }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  const unauthorized = requireOwnerAccess(request);
+  return unauthorized ?? recordEvidence(request);
 }

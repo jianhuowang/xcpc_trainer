@@ -9,7 +9,10 @@ import {
   selectDailyQueue,
 } from "../lib/training/modes.ts";
 import { classifyTransferAttempt } from "../lib/training/transfer.ts";
-import { shouldReactivateProblem } from "../lib/training/reactivation.ts";
+import {
+  scheduleProblemEvidence,
+  shouldReactivateProblem,
+} from "../lib/training/reactivation.ts";
 
 const NOW = new Date("2026-08-29T12:00:00.000Z");
 
@@ -105,20 +108,35 @@ test("失败会清空连续记录并累计遗忘次数", () => {
 
 test("每日队列先排补题债务，再按到期时间排列", () => {
   const items = [
-    { id: "review-old", status: "review", nextReviewAt: "2026-08-20" },
-    { id: "transfer", status: "transfer", nextReviewAt: "2026-08-19" },
-    { id: "upsolve-new", status: "upsolve", nextReviewAt: "2026-08-29" },
-    { id: "upsolve-old", status: "upsolve", nextReviewAt: "2026-08-28" },
-    { id: "review-new", status: "review", nextReviewAt: "2026-08-29" },
+    { id: 1, label: "review-old", status: "review", nextReviewAt: "2026-08-20" },
+    { id: 2, label: "transfer", status: "transfer", nextReviewAt: "2026-08-19" },
+    { id: 3, label: "upsolve-new", status: "upsolve", nextReviewAt: "2026-08-29" },
+    { id: 4, label: "upsolve-old", status: "upsolve", nextReviewAt: "2026-08-28" },
+    { id: 5, label: "review-new", status: "review", nextReviewAt: "2026-08-29" },
   ];
   const queue = buildDailyQueue(items, "normal");
   assert.deepEqual(
-    queue.selected.map((item) => item.id),
+    queue.selected.map((item) => item.label),
     ["upsolve-old", "upsolve-new", "transfer", "review-old", "review-new"],
   );
   assert.equal(queue.upsolve.length, 2);
   assert.equal(queue.transfer.length, 1);
   assert.equal(queue.review.length, 2);
+});
+
+test("同优先级同日期时使用稳定 ID 决胜", () => {
+  const queue = buildDailyQueue(
+    [
+      { id: 30, status: "review", nextReviewAt: "2026-08-29" },
+      { id: 10, status: "review", nextReviewAt: "2026-08-29" },
+      { id: 20, status: "review", nextReviewAt: "2026-08-29" },
+    ],
+    "normal",
+  );
+  assert.deepEqual(
+    queue.selected.map((item) => item.id),
+    [10, 20, 30],
+  );
 });
 
 test("只有陌生迁移题的首次独立 AC 可以形成迁移证据", () => {
@@ -153,6 +171,35 @@ test("稳定或保持题遇到新的非独立证据会重新激活", () => {
   assert.equal(shouldReactivateProblem("retained", "hinted_ac"), true);
   assert.equal(shouldReactivateProblem("stable", "independent_ac"), false);
   assert.equal(shouldReactivateProblem("review", "failed"), false);
+});
+
+test("稳定态再次独立完成只追加证据而不重新排期", () => {
+  const decision = scheduleProblemEvidence({
+    status: "stable",
+    reviewStage: 4,
+    cleanStreak: 1,
+    lapseCount: 0,
+    lastEvidence: "independent_ac",
+    evidence: "independent_ac",
+    now: NOW,
+  });
+  assert.equal(decision.status, "stable");
+  assert.equal(decision.dueAt, null);
+  assert.equal(decision.reviewStage, 4);
+});
+
+test("稳定态收到失败证据仍会重新激活", () => {
+  const decision = scheduleProblemEvidence({
+    status: "stable",
+    reviewStage: 4,
+    cleanStreak: 1,
+    lapseCount: 0,
+    lastEvidence: "independent_ac",
+    evidence: "failed",
+    now: NOW,
+  });
+  assert.equal(decision.status, "upsolve");
+  assert.ok(decision.dueAt);
 });
 
 test("训练模式会稳定限制每日队列", () => {

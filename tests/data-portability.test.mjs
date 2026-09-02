@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   parseImportBundle,
   problemIdentity,
+  settingsMergePreview,
 } from "../lib/data/import.ts";
+import { buildImportPlan } from "../lib/data/import-plan.ts";
 import {
   createReminderCandidate,
   shanghaiDateKey,
@@ -49,7 +52,129 @@ test("v1 备份可以安全升级为统一导入结构", () => {
   assert.equal(parsed.problems[0].cleanStreak, 2);
   assert.equal(parsed.problems[0].lapseCount, 0);
   assert.equal(parsed.attempts[0].sourceProblemId, 8);
+  assert.equal(parsed.attempts[0].helpLevel, "unknown");
+  assert.equal(parsed.attempts[0].idempotencyKey, null);
   assert.equal(parsed.settings.mode, "recovery");
+});
+
+test("v5 attempt 保留结构化帮助等级和幂等键", () => {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  backup.attempts[0].helpLevel = "h1";
+  backup.attempts[0].idempotencyKey = "018f0f66-7a28-7e31-8a4d-a70b93879a11";
+  const parsed = parseImportBundle(backup);
+  assert.equal(parsed.attempts[0].helpLevel, "h1");
+  assert.equal(
+    parsed.attempts[0].idempotencyKey,
+    "018f0f66-7a28-7e31-8a4d-a70b93879a11",
+  );
+});
+
+test("v5 拒绝非法帮助等级和过短幂等键", () => {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  backup.attempts[0].helpLevel = "H9";
+  backup.attempts[0].idempotencyKey = "short";
+  assert.throws(() => parseImportBundle(backup), /帮助等级|幂等键/);
+});
+
+test("v5 拒绝备份内重复幂等键", () => {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  backup.attempts[0].helpLevel = "none";
+  backup.attempts[0].idempotencyKey = "018f0f66-7a28-7e31-8a4d-a70b93879a11";
+  backup.attempts.push({ ...backup.attempts[0] });
+  assert.throws(() => parseImportBundle(backup), /重复幂等键/);
+});
+
+function v5Backup() {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  Object.assign(backup.attempts[0], {
+    helpLevel: "h1",
+    idempotencyKey: "018f0f66-7a28-7e31-8a4d-a70b93879a11",
+    scheduledAt: "2026-09-01T00:00:00.000Z",
+    scheduleReason: "历史档案导入",
+    notes: "legacy",
+  });
+  return backup;
+}
+
+function existingFor(bundle) {
+  return {
+    contests: [],
+    problems: [{
+      id: 42,
+      title: bundle.problems[0].title,
+      url: bundle.problems[0].url,
+      platform: bundle.problems[0].platform,
+    }],
+    attempts: [],
+    hasSettings: true,
+    maxContestId: 0,
+    maxProblemId: 42,
+  };
+}
+
+test("v5 已有题保留投影并只追加缺失的幂等 attempt", () => {
+  const bundle = parseImportBundle(v5Backup());
+  const plan = buildImportPlan(bundle, existingFor(bundle));
+
+  assert.equal(plan.problems.length, 0);
+  assert.equal(plan.attempts.length, 1);
+  assert.equal(plan.attempts[0].problemId, 42);
+  assert.deepEqual(plan.settings, []);
+});
+
+test("相同幂等键只接受完整 payload 一致的重试", () => {
+  const bundle = parseImportBundle(v5Backup());
+  const existing = existingFor(bundle);
+  existing.attempts.push({
+    problemId: 42,
+    context: bundle.attempts[0].context,
+    evidence: bundle.attempts[0].evidence,
+    helpLevel: bundle.attempts[0].helpLevel,
+    previousStage: bundle.attempts[0].previousStage,
+    nextStage: bundle.attempts[0].nextStage,
+    scheduledAt: bundle.attempts[0].scheduledAt,
+    scheduleReason: bundle.attempts[0].scheduleReason,
+    notes: bundle.attempts[0].notes,
+    attemptedAt: bundle.attempts[0].attemptedAt,
+    idempotencyKey: bundle.attempts[0].idempotencyKey,
+  });
+
+  assert.equal(buildImportPlan(bundle, existing).preview.attempts.skip, 1);
+  existing.attempts[0].attemptedAt = "2026-08-30T00:00:00.000Z";
+  assert.throws(() => buildImportPlan(bundle, existing), /幂等键冲突/);
+});
+
+test("导入计划保留前向声明的迁移题关联", () => {
+  const backup = structuredClone(BASE_BACKUP);
+  backup.version = 5;
+  backup.attempts[0].helpLevel = "none";
+  backup.attempts[0].idempotencyKey = "018f0f66-7a28-7e31-8a4d-a70b93879a12";
+  backup.problems.unshift({
+    ...backup.problems[0],
+    id: 9,
+    title: "Unseen Transfer",
+    url: "https://codeforces.com/problemset/problem/2/B",
+    status: "transfer",
+    trainingRole: "transfer",
+    validatesProblemId: 8,
+    transferIntegrity: "unseen",
+    lastEvidence: "assigned_transfer",
+  });
+  const bundle = parseImportBundle(backup);
+  const plan = buildImportPlan(bundle, {
+    contests: [],
+    problems: [],
+    attempts: [],
+    hasSettings: false,
+    maxContestId: 0,
+    maxProblemId: 0,
+  });
+
+  assert.equal(plan.problems[0].validatesProblemId, plan.problems[1].id);
 });
 
 test("题目链接去重不受末尾斜杠和大小写影响", () => {
@@ -137,4 +262,37 @@ test("提醒按上海自然日生成稳定去重键", () => {
   });
   assert.equal(first.dedupeKey, second.dedupeKey);
   assert.equal(first.payload.selectedCount, 2);
+});
+
+test("设置导入预览遵守仅合并语义", () => {
+  assert.deepEqual(settingsMergePreview(false), { add: 1, skip: 0 });
+  assert.deepEqual(settingsMergePreview(true), { add: 0, skip: 1 });
+});
+
+test("迁移历史只追加 0005 evidence integrity", async () => {
+  const journal = JSON.parse(
+    await readFile(
+      new URL("../drizzle/meta/_journal.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(
+    journal.entries.map((entry) => entry.tag),
+    [
+      "0000_chunky_moon_knight",
+      "0001_mighty_bushwacker",
+      "0002_curly_selene",
+      "0003_warm_liz_osborn",
+      "0004_mean_blue_blade",
+      "0005_evidence_integrity",
+    ],
+  );
+});
+
+test("完整导出版本升级为 v5", async () => {
+  const source = await readFile(
+    new URL("../app/api/export/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /version:\s*5/);
 });

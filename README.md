@@ -47,8 +47,11 @@
 
 ```bash
 npm ci
+npm run db:migrate:local
 npm run dev
 ```
+
+`db:migrate:local` 只把仓库中既有的 `drizzle/0000`-`0005` 应用到已忽略的 `.wrangler/state`。它不会修改托管 D1，可以安全重复执行。
 
 常用检查：
 
@@ -87,8 +90,27 @@ docs/                 架构与交接状态
 | `GET/POST` | `/api/integrations/codeforces` | 预览或导入公开提交记录 |
 | `POST` | `/api/transfers` | 为已保持题目建立无标签迁移任务 |
 | `GET` | `/api/agent/context` | 给模型读取无提示训练队列 |
+| `PUT` | `/api/agent/mode` | 持久化用户明确选择的训练模式 |
 | `POST` | `/api/agent/evidence` | 给模型提交规范化训练证据 |
 | `GET` | `/api/openapi` | 获取 Agent API 的 OpenAPI 文档 |
+
+## ChatGPT 网页 Coach
+
+最短流程：部署并应用 `0005` → 设置 `TRAINER_OWNER_EMAIL` 和 `AGENT_API_KEY` 两个 secrets → 导入 `/api/openapi` → 粘贴 Coach 指令 → 先做脱敏冒烟。
+
+完整的指令、GPT 编辑器设置、凭证边界和冒烟顺序见 [`docs/chatgpt/xcpc-coach-setup.md`](docs/chatgpt/xcpc-coach-setup.md)。
+
+## 旧训练控制台一次性迁移
+
+旧 ChatGPT 对话不会自动同步。先把包含完整 `[TRAINING_CARD]` 的内容保存为 UTF-8 Markdown，再转换成可由 Dashboard 预览的 v5 备份：
+
+```powershell
+node scripts/legacy-training-cards.mjs --source $sourceFile --out $backupFile --source-id training-console --import-date 2026-09-02
+```
+
+转换器只接受能明确识别题名、URL 和日期的训练卡；缺失或冲突项进入 `legacyImportReport.reviewRequired`，不会猜测写入。旧 `nextReview` 和旧状态一律忽略，新题按风险顺序每天最多激活一道；已有题保留当前投影，只追加缺失的幂等历史 attempt。
+
+在 Dashboard 的“导入备份”中先查看 dry-run 预览，确认后再合并。重复导入同一文件会跳过相同 attempt；相同幂等键但内容不同会在写入前整体拒绝。源 Markdown 和生成的 JSON 含个人训练记录，不要提交到 Git。
 
 ## 下一阶段
 

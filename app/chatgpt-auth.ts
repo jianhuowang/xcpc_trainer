@@ -1,5 +1,7 @@
+import { env } from "cloudflare:workers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { isLoopbackHost, normalizeEmail } from "@/lib/auth/access";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -42,6 +44,39 @@ export async function requireChatGPTUser(
   if (user) return user;
 
   redirect(chatGPTSignInPath(returnTo));
+}
+
+export type TrainerPageAccess =
+  | { kind: "allowed" }
+  | { kind: "forbidden" }
+  | { kind: "misconfigured" };
+
+export async function trainerPageAccess(): Promise<TrainerPageAccess> {
+  const requestHeaders = await headers();
+  const configured = normalizeEmail(
+    (env as unknown as { TRAINER_OWNER_EMAIL?: string }).TRAINER_OWNER_EMAIL,
+  );
+  const host = requestHeaders.get("host") ?? "";
+  let hostname = "";
+  try {
+    hostname = new URL(`http://${host}`).hostname;
+  } catch {
+    hostname = "";
+  }
+  if (
+    !configured &&
+    process.env.NODE_ENV === "development" &&
+    isLoopbackHost(hostname)
+  ) {
+    return { kind: "allowed" };
+  }
+
+  const user = await getChatGPTUser();
+  if (!user) redirect(chatGPTSignInPath("/"));
+  if (!configured) return { kind: "misconfigured" };
+  return normalizeEmail(user.email) === configured
+    ? { kind: "allowed" }
+    : { kind: "forbidden" };
 }
 
 export function chatGPTSignInPath(returnTo: string): string {

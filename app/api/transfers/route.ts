@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { problems } from "@/db/schema";
-import { requireAgentAccess } from "@/lib/agent/auth";
+import { requireOwnerAccess } from "@/lib/agent/auth";
 import { afterShanghaiDays } from "@/lib/training/scheduler";
 
 const PLATFORMS = new Set([
@@ -13,7 +13,7 @@ const PLATFORMS = new Set([
 ]);
 
 export async function POST(request: Request) {
-  const unauthorized = requireAgentAccess(request);
+  const unauthorized = requireOwnerAccess(request);
   if (unauthorized) return unauthorized;
   try {
     const body = (await request.json()) as Record<string, unknown>;
