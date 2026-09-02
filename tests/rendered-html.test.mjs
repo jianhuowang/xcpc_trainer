@@ -35,3 +35,12 @@ test("浏览器证据提交包含帮助等级和稳定幂等键", async () => {
   assert.match(source, /helpLevel:\s*reviewHelpLevel/);
   assert.match(source, /idempotencyKey:\s*reviewAttemptKey/);
 });
+
+test("到期题卡片辅助信息保持可读字号和对比度", async () => {
+  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+
+  assert.match(
+    source,
+    /className="mt-1 font-mono text-xs uppercase tracking-wider text-foreground\/70"[\s\S]*?到期 \{localDay\(problem\.nextReviewAt\)\} · 先盲做，不看旧笔记/,
+  );
+});
