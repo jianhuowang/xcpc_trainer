@@ -909,7 +909,7 @@ function DueCard({
                 </Badge>
               </div>
               <h3 className="text-lg font-black leading-snug tracking-tight">{problem.title}</h3>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              <p className="mt-1 font-mono text-xs uppercase tracking-wider text-foreground/70">
                 到期 {localDay(problem.nextReviewAt)} · 先盲做，不看旧笔记
               </p>
             </div>
